@@ -57,6 +57,14 @@ editing ──submit──▶ client validation ──fails──▶ editing (er
 - **Failed**: the message depends on the `ApiError` kind — network ("Couldn't reach OpEx"), server ("OpEx couldn't save this"), rate limited ("Too many requests — try again in {n} s", retry disabled until then), forbidden ("Your account isn't permitted to do this", no retry).
 - `unauthorized` does not reach the form: Auth & Session ends the session and the draft carries the input across sign-in.
 
+## Length and Count Limits
+
+Business-rule limits (HLD § Business rules) are part of a form's Zod schema, using the area's domain constant.
+
+- A text field with a length limit shows a live counter ("3,950 / 4,000") once the text reaches 80% of the limit. Length is counted in Unicode code points.
+- The field does not use the HTML `maxlength` attribute, so pasting long text never silently drops the excess. Text over the limit stays as typed, the counter and field show the error ("{n} characters over the limit"), and submit is blocked until it is shortened.
+- A multi-select with a count limit shows "{n} of {limit} selected"; at the limit, unselected options are disabled with the reason, and selected ones can still be removed.
+
 ## Unsaved-Changes Guard
 
 - A form is *dirty* when its values differ from the last confirmed values.

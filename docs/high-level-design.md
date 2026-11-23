@@ -294,7 +294,7 @@ sequenceDiagram
     participant UI as opex-web-ui
     participant API as opex-web-api
     U->>UI: Edits and submits
-    UI->>UI: Client-side validation (shape and required fields only)
+    UI->>UI: Client-side validation (shape, required fields, business-rule limits)
     UI->>API: Write request
     alt Confirmed
         API-->>UI: 2xx + saved record
@@ -308,9 +308,23 @@ sequenceDiagram
 ```
 
 - The UI never displays a record as saved from its own local state; the saved state is what the API returns or what a refetch shows.
-- Client-side validation exists for fast feedback only; the API's validation is authoritative.
+- Client-side validation covers shape, required fields, and the business-rule limits below. It exists for fast feedback only; the API's validation is authoritative.
 - Leaving a form with unsaved changes asks for confirmation.
 - Unsaved input survives the session ending: a form's draft is kept in the tab's `sessionStorage`, keyed by user, tenant, and form, and restored after signing in again. Masked or secret fields are never stored. Signing out discards drafts.
+
+### Business rules
+
+Limits that `opex-web-api` enforces and the UI also enforces, so a user learns of them while editing rather than from a rejected save.
+
+| Rule | Limit | Area |
+|---|---|---|
+| Source-system items collected per source system per tenant (GitHub repos, SonarQube projects, Jira projects, PagerDuty services, …) | 10 | Tenant administration |
+| RCA write-up length | 4,000 characters | Improvement (DMAIC) |
+| Free-text answer length in the anomaly feedback questionnaire | 1,000 characters | Insights |
+
+- Each limit is a named constant in its area's `domain` layer, equal to the value in the OAS schema; a mismatch is a defect in the UI.
+- Characters are counted as Unicode code points, the same way the API counts them.
+- The UI never truncates input to fit a limit. Text over a limit stays as typed, is marked invalid, and blocks saving until shortened; a selection at its limit cannot be extended until an item is removed.
 
 ### Environment profiles
 
@@ -492,7 +506,7 @@ Pull requests share one QA environment. A newer QA workflow run cancels any in-p
 - **Date range model:** the earliest date the API holds data for, which bucket granularities (day, week, sprint, month) the API supports for a given date range, and whether range parameters are calendar dates or UTC instants (which fixes how a range chosen in the user's time zone is sent).
 - **Tenant configuration concurrency:** whether the API detects conflicting edits (e.g. a version or ETag) so that two editors cannot silently overwrite each other, and when a saved change takes effect in collection.
 - **Insights contract:** the run-request endpoint, how a tenant's reports are listed and one is chosen for reading (e.g. by date range), whether the date range selected for reporting dimensions also selects the report, the report document's status values, and the shape in which the API reports the paused state and its resume date — defined by `opex-web-api`'s `insights` design.
-- **Anomaly feedback (in progress):** the shape of feedback (e.g. confirm, dismiss, comment) and how `opex-insights-workflow` consumes it.
+- **Anomaly feedback (in progress):** the shape of feedback (e.g. confirm, dismiss), the questionnaire's questions and answer types, and how `opex-insights-workflow` consumes it.
 - **DMAIC model:** ticket fields, allowed phase transitions, how RCA tickets and action tickets relate, what makes an improvement verified in Control, and whether tickets link to Jira.
 - **Access-request lifecycle:** whether requests carry statuses the administrator can set in the UI, or remain a read-only log.
 - **Sign-in smoke check:** whether deployed environments also need an automated sign-in check, which would require a dedicated named test user.
