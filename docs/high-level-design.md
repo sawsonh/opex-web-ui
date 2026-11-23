@@ -12,19 +12,21 @@ The OpEx system addresses this end to end. `opex-collector-worker` collects sour
 
 `opex-web-ui` is a React + TypeScript single-page application. It is a static bundle on S3, served by the same CloudFront distribution that fronts `opex-web-api` under `/v1`, so the browser talks to one origin. Named users sign in with the SPA's own forms against Amazon Cognito. Every read and every write goes through `opex-web-api`, which persists to MongoDB Atlas.
 
+A **tenant** is one engineering team. Metrics, insights, tenant configuration, and improvement tickets all belong to a tenant; there is no team concept within a tenant.
+
 The UI has five kinds of work, each a bounded area:
 
 | Area | What users do | Reads | Writes | Who |
 |---|---|---|---|---|
-| **Reporting dimensions** | Explore metrics per team over a date range as interactive Plotly.js charts | Analytical model | — | Demo visitors (demo tenant); every signed-in role |
+| **Reporting dimensions** | Explore a tenant's metrics over a date range as interactive Plotly.js charts | Analytical model | — | Demo visitors (demo tenant); `opex-editor`; `opex-admin` |
 | **Insights** | Read the per-section insights of a report generated for a date range; give feedback on flagged anomalies; request an insights run | Insights | Anomaly feedback; insights run requests | Read: demo visitors (demo tenant), signed-in roles · Feedback: `opex-editor`, `opex-admin` · Run requests: `opex-editor` for its tenants, `opex-admin` for every tenant |
-| **Improvement (DMAIC)** | Open RCA tickets and action tickets against a bad metric and carry them through Define, Measure, Analyze, Improve, and Control until the improvement is verified | Improvement tickets, metrics | Improvement tickets | Read: signed-in roles · Write: `opex-editor`, `opex-admin` |
+| **Improvement (DMAIC)** | Open RCA tickets and action tickets against a bad metric and carry them through Define, Measure, Analyze, Improve, and Control until the improvement is verified | Improvement tickets, metrics | Improvement tickets | `opex-editor`, `opex-admin` |
 | **Access requests** | Anyone requests editor access through a public form; the administrator reads submitted requests | Access requests | Access requests | Submit: anyone, signed in or not · Read: `opex-admin` |
 | **Tenant administration** | Choose which GitHub repos, SonarQube projects, Jira projects, PagerDuty services, and other source items the collector pulls for a tenant | Tenant configuration | Tenant configuration | `opex-editor` for its tenants; `opex-admin` for every tenant |
 
 ### Presentation, not computation
 
-The UI presents metrics; it does not compute them. Aggregation, rollups, and metric definitions (what counts as "PR Cycle Time", how MTTR is averaged) live upstream in the collector and API, where they are computed once for every consumer. The same holds for judgments derived from metrics: insights come from `opex-insights-workflow`, whether an improvement is verified is decided from metrics the API serves, and whether insights are paused is reported by the API. The UI owns presentation transforms only: unit conversion, formatting, sorting, chart shaping, and choosing which series to show.
+The UI presents metrics; it does not compute them. Aggregation, rollups, and metric definitions (what counts as "PR Cycle Time", how MTTR is averaged) live upstream in the collector and API, where they are computed once for every consumer. The same holds for judgments derived from metrics: insights come from `opex-insights-workflow`, whether an improvement is verified is decided from metrics the API serves, and whether insights are paused is reported by the API. The UI owns presentation transforms only: unit conversion, conversion of dates and times to the user's local time zone, formatting, sorting, chart shaping, and choosing which series to show.
 
 ### Writes are records the API owns
 
@@ -47,8 +49,7 @@ The `opex-web-api` OpenAPI Specification is the source of truth for every reques
 | User | Access | What they need |
 |---|---|---|
 | **Demo visitors** | No account; "View demo" opens the demo tenant's reporting dimensions and insights, read-only | To see what OpEx shows without asking anyone, and an obvious way to request access or sign in |
-| **Readers** (`opex-reader`) | Named account in the main user pool, member of one or more tenant groups | Dense, interactive charts — filter, drill down, hover for exact values, compare series — and numbers they can trust and cite; a misleading chart costs them more than a missing one |
-| **Editors** (`opex-editor`) | Named account in the main user pool, created by the administrator after an access request, with a temporary password replaced at first sign-in | Everything readers need, plus configuring their tenants' collection, requesting insights runs for them, giving anomaly feedback, and working improvement tickets; and to know when insights are paused by the budget guard |
+| **Editors** (`opex-editor`) | Named account in the main user pool, created by the administrator after an access request, with a temporary password replaced at first sign-in; member of one or more tenant groups | Dense, interactive charts — filter, drill down, hover for exact values, compare series — and numbers they can trust and cite (a misleading chart costs them more than a missing one); configuring their tenants' collection, requesting insights runs for them, giving anomaly feedback, and working improvement tickets; and to know when insights are paused by the budget guard |
 | **The administrator** (`opex-admin`) | Private account in the admin user pool, with authenticator-app MFA | To read access requests and act on any tenant, including requesting insights runs, and to know when insights are paused by the budget guard |
 
 ## Goals
@@ -57,7 +58,7 @@ The `opex-web-api` OpenAPI Specification is the source of truth for every reques
 - Anyone, signed in or not, can request editor access.
 - Named users sign in with email and password; the administrator also with an authenticator code. First sign-in with a temporary password and first administrator sign-in without an enrolled authenticator are completed in the UI.
 - Named users can change their password and reset a forgotten one.
-- Analysts can view every supported metric for a team over a chosen date range — a preset (e.g. last 30 days, last quarter) or a custom start and end date — without visiting the source systems.
+- Editors and the administrator can view every supported metric for a tenant over a chosen date range — a preset (e.g. last 30 days, last quarter) or a custom start and end date — without visiting the source systems.
 - Every value the UI shows matches the value `opex-web-api` returned for the same query — the UI never alters a metric's meaning.
 - Missing, partial, or stale data is always visibly labeled as such.
 - Users who belong to several tenants can switch between them without signing in again.
@@ -107,7 +108,7 @@ flowchart LR
     SQ & GH & JI & PD --> CW[opex-collector-worker]
     CW -- reads tenant configuration<br/>writes analytical model --> DB[(MongoDB Atlas)]
     IW[opex-insights-workflow] -- reads analytical model<br/>writes reports & insights --> DB
-    User((Visitor / Reader / Editor / Administrator)) --> CF[CloudFront<br/>one origin]
+    User((Visitor / Editor / Administrator)) --> CF[CloudFront<br/>one origin]
     CF -- "/v1/*" --> API[opex-web-api<br/>API Gateway + Lambda]
     CF -- everything else --> S3[(S3 static bundle<br/>opex-web-ui)]
     API -- reads analytical model & insights<br/>reads/writes owned records --> DB
@@ -123,7 +124,7 @@ flowchart LR
 ```
 src/
   app/                 Application shell: bootstrap, routing, layout, navigation,
-                       demo indicator, tenant switcher, team & date range selection,
+                       demo indicator, tenant switcher, date range selection,
                        role-gated areas, error boundaries
   platform/
     auth/              AuthGateway port + adapters (Cognito main pool, Cognito admin pool,
@@ -135,13 +136,13 @@ src/
   shared/
     charting/          Plotly.js wrappers and chart conventions
     domain/            Cross-area value objects and references
-                       (DateRange, TenantId, TeamId, Role, MetricRef, AnomalyRef, …)
+                       (DateRange, TenantId, Role, MetricRef, AnomalyRef, …)
     forms/             Form state, validation display, save/conflict/error presentation
     ui/                Shared presentational components
   dimensions/          One module per reporting dimension (read-only)
     code-quality/
       domain/          Metric types, value objects, presentation rules — no React/HTTP/Plotly
-      application/     Use cases (e.g. "load Code Quality summary for team over date range")
+      application/     Use cases (e.g. "load Code Quality summary for tenant over date range")
       infrastructure/  Adapters: generated-client calls → domain types
       ui/              Panels, pages, charts
     test-coverage/
@@ -193,7 +194,7 @@ Two Cognito user pools, chosen by route:
 
 | Route | Pool | Users | Factors |
 |---|---|---|---|
-| `/sign-in` | Main | `opex-reader`, `opex-editor` | Email + password |
+| `/sign-in` | Main | `opex-editor` | Email + password |
 | `/admin/sign-in` | Admin | `opex-admin` | Email + password + authenticator-app code |
 
 ```mermaid
@@ -233,7 +234,7 @@ sequenceDiagram
 - **Tokens** live in `sessionStorage`, scoped to the tab. A new tab adopts the session of an already signed-in tab over a same-origin `BroadcastChannel` handoff, and signs in normally when no tab answers.
 - **Signing out** revokes the refresh token, clears the tab's tokens, and tells other tabs to clear theirs.
 - **Only the access token** is sent to `/v1`. The ID token is never sent to the API. Tokens are never logged, never placed in a URL, and never sent anywhere except Cognito and `/v1`.
-- **`LOCAL`** uses a development-only adapter behind the same `AuthGateway` port: a sign-in page listing development identities (reader, editor, administrator) whose tokens are minted with `dotnet user-jwts` against `opex-web-api`'s local issuers and kept in a git-ignored local environment file. The adapter is selected by profile at build time and is absent from `QA` and `PROD` bundles.
+- **`LOCAL`** uses a development-only adapter behind the same `AuthGateway` port: a sign-in page listing development identities (editor, administrator) whose tokens are minted with `dotnet user-jwts` against `opex-web-api`'s local issuers and kept in a git-ignored local environment file. The adapter is selected by profile at build time and is absent from `QA` and `PROD` bundles.
 
 ### Roles and tenants
 
@@ -241,17 +242,19 @@ One adapter in `platform/auth` maps a token to the user context; nothing else re
 
 | Token from | Role | Tenants |
 |---|---|---|
-| Main pool | The role group in `cognito:groups`: `opex-reader` or `opex-editor` | Every `tenant-{tenantId}` group in `cognito:groups` |
-| Admin pool | `opex-admin`, from the issuer | Every tenant, listed by the API |
+| Main pool | `opex-editor` when `cognito:groups` contains it; otherwise no role | Every `tenant-{tenantId}` group in `cognito:groups` |
+| Admin pool | `opex-admin`, from the issuer | Every tenant, listed by the API, whatever tenant groups the token holds |
 
-| Capability | Demo | `opex-reader` | `opex-editor` | `opex-admin` |
-|---|---|---|---|---|
-| View reporting dimensions | demo tenant | own tenants | own tenants | every tenant |
-| View insights | demo tenant | own tenants | own tenants | every tenant |
-| View improvement tickets | | own tenants | own tenants | every tenant |
-| Edit tenant configuration; request insights runs; give anomaly feedback; create and advance improvement tickets | | | own tenants | every tenant |
-| Read access requests | | | | ✓ |
-| Submit an access request | ✓ | ✓ | ✓ | ✓ |
+| Capability | Demo | `opex-editor` | `opex-admin` |
+|---|---|---|---|
+| View reporting dimensions | demo tenant | own tenants | every tenant |
+| View insights | demo tenant | own tenants | every tenant |
+| View improvement tickets | | own tenants | every tenant |
+| Edit tenant configuration; request insights runs; give anomaly feedback; create and advance improvement tickets | | own tenants | every tenant |
+| Read access requests | | | ✓ |
+| Submit an access request | ✓ | ✓ | ✓ |
+
+- A main-pool user without the `opex-editor` group, or with no tenant groups, is signed in but has no access; the UI says so and links to the access-request form.
 
 - The **active tenant** is chosen in the app shell from the user's tenants and appears in the UI route, so links are shareable. A route naming a tenant outside the user's tenants shows a not-permitted state rather than calling the API. A user with one tenant never sees a switcher.
 
@@ -279,7 +282,7 @@ sequenceDiagram
 
 ### Insights runs and the paused state
 
-- An editor, for one of their tenants, or the administrator, for any tenant, requests an insights run for a tenant and date range; `opex-web-api` records the run as a report document and starts the workflow run. Readers and demo visitors see no run action.
+- An editor, for one of their tenants, or the administrator, for any tenant, requests an insights run for a tenant and date range; `opex-web-api` records the run as a report document and starts the workflow run. Demo visitors see no run action.
 - The UI shows a run's progress from the report document's status, as the API serves it. A date range ending after the tenant's latest aggregated date is rejected by the API, and the UI shows that reason.
 - When the API reports insights as paused by the monthly budget guard — from the guard's status or from a refused run — the insights area shows users who can request runs that insights are paused until the first of next month, with the resume date the API reports, in place of a generic error. Other areas keep working.
 
@@ -307,6 +310,7 @@ sequenceDiagram
 - The UI never displays a record as saved from its own local state; the saved state is what the API returns or what a refetch shows.
 - Client-side validation exists for fast feedback only; the API's validation is authoritative.
 - Leaving a form with unsaved changes asks for confirmation.
+- Unsaved input survives the session ending: a form's draft is kept in the tab's `sessionStorage`, keyed by user, tenant, and form, and restored after signing in again. Masked or secret fields are never stored. Signing out discards drafts.
 
 ### Environment profiles
 
@@ -347,7 +351,7 @@ Each component below is a leaf LLD under `docs/intent/`, owning the EARS prefix 
 
 | Component | Folder | EARS prefix | Owns |
 |---|---|---|---|
-| App Shell | `app-shell/` | `SHELL` | Routing, layout, navigation, landing page, demo indicator, tenant switcher, team & date range selection (presets and custom start/end), role-gated areas, global error handling |
+| App Shell | `app-shell/` | `SHELL` | Routing, layout, navigation, landing page, demo indicator, tenant switcher, date range selection (presets and custom start/end), role-gated areas, global error handling |
 | Auth & Session | `auth-session/` | `AUTH` | `AuthGateway` port; main-pool, admin-pool, and LOCAL adapters; sign-in challenges; password change and reset; demo/none/signed-in states; token storage, refresh, and tab handoff; sign-out; claims → user context; 401/403 handling |
 | API Client | `api-client/` | `API` | Client generation from OAS, `/v1` transport, Bearer vs. demo (no header) requests, demo request guard, error mapping |
 | Profile Config | `profile-config/` | `CFG` | LOCAL/QA/PROD configuration, `demoTenantId`, and validation |
@@ -378,7 +382,7 @@ Each reporting dimension, and each of insights, improvement, access requests, an
 
 Visitors read the demo tenant's reporting data and insights with no token; `opex-web-api` permits unauthenticated `GET`s of those for that tenant only.
 
-- *Alternative — a shared reader account with published credentials:* one sign-in path for everyone, but any visitor holding its token could change its password, email, or MFA through Cognito's self-service calls, locking out or taking over the account for everyone.
+- *Alternative — a shared demo account with published credentials:* one sign-in path for everyone, but any visitor holding its token could change its password, email, or MFA through Cognito's self-service calls, locking out or taking over the account for everyone.
 - *Why this one:* nothing to lock down, no credentials to publish, and the demo opens in one click. The UI mirrors the API's rule with a demo request guard so a bug cannot send writes or non-demo reads without a token.
 
 ### 3. Two Cognito user pools, chosen by route
@@ -485,7 +489,7 @@ Pull requests share one QA environment. A newer QA workflow run cancels any in-p
 - **Local API port:** the `LOCAL` profile's `opex-web-api` port is not yet fixed.
 - **Token lifetimes:** access-token and refresh-token validity for each pool's app client.
 - **Tenant list for the administrator:** the API endpoint that lists every tenant, for the administrator's tenant switcher.
-- **Team and date range model:** how teams are identified, the earliest date the API holds data for, and which bucket granularities (day, week, sprint, month) the API supports for a given date range.
+- **Date range model:** the earliest date the API holds data for, which bucket granularities (day, week, sprint, month) the API supports for a given date range, and whether range parameters are calendar dates or UTC instants (which fixes how a range chosen in the user's time zone is sent).
 - **Tenant configuration concurrency:** whether the API detects conflicting edits (e.g. a version or ETag) so that two editors cannot silently overwrite each other, and when a saved change takes effect in collection.
 - **Insights contract:** the run-request endpoint, how a tenant's reports are listed and one is chosen for reading (e.g. by date range), whether the date range selected for reporting dimensions also selects the report, the report document's status values, and the shape in which the API reports the paused state and its resume date — defined by `opex-web-api`'s `insights` design.
 - **Anomaly feedback (in progress):** the shape of feedback (e.g. confirm, dismiss, comment) and how `opex-insights-workflow` consumes it.

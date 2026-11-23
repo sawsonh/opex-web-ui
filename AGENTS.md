@@ -6,7 +6,7 @@ Instructions for AI coding agents (and humans) working in this repository.
 
 ## Project overview
 
-`opex-web-ui` is the frontend for **Operational Excellence (OpEx) reporting**: a single-page application where anyone can explore a demo tenant without signing in; signed-in analysts examine team performance across engineering health dimensions, read insights and give feedback on flagged anomalies, and drive improvement through DMAIC with RCA and action tickets; editors configure which source-system items are collected for their tenants and request insights runs for them; and the administrator reads access requests and acts on any tenant.
+`opex-web-ui` is the frontend for **Operational Excellence (OpEx) reporting**: a single-page application where anyone can explore a demo tenant without signing in; editors examine their tenants' performance across engineering health dimensions, read insights and give feedback on flagged anomalies, drive improvement through DMAIC with RCA and action tickets, configure which source-system items are collected for their tenants, and request insights runs for them; and the administrator reads access requests and acts on any tenant.
 
 ### The OpEx system
 
@@ -41,7 +41,7 @@ Each reporting dimension presents data shaped by the collector from a specific o
 | Access Requests | Anyone; the administrator | The public **access request** form and the administrator's list of requests |
 | Tenant Administration | Editors; the administrator | **Tenant configuration** of which GitHub repos, SonarQube projects, Jira projects, PagerDuty services, and other source items are collected |
 
-Use these names — dimension, metric, origin, team, tenant, date range, report, insights, insights run, health score, anomaly, anomaly feedback, DMAIC, RCA ticket, action ticket, tenant configuration, access request, demo tenant — consistently in code, specs, and docs (ubiquitous language). Model new dimensions and areas as new bounded areas rather than special cases inside existing ones.
+Use these names — dimension, metric, origin, tenant, date range, report, insights, insights run, health score, anomaly, anomaly feedback, DMAIC, RCA ticket, action ticket, tenant configuration, access request, demo tenant — consistently in code, specs, and docs (ubiquitous language). A **tenant** is one engineering team; there is no separate team concept within a tenant. Model new dimensions and areas as new bounded areas rather than special cases inside existing ones.
 
 ## Tech stack & hosting
 
@@ -74,9 +74,9 @@ Concrete layering, folder structure, and library choices are recorded in `docs/h
 
 - **The `opex-web-api` OAS is the source of truth for the API contract.** Prefer generating TypeScript types / client code from the OAS over hand-writing request/response shapes; keep any hand-written mapping in an adapter layer that translates API DTOs into domain types.
 - **Demo without signing in.** "View demo" opens the demo tenant's reporting dimensions and insights, read-only — no anomaly feedback, no insights run requests, no edits. In the demo state the UI sends only `GET` reporting and insights reads under `/v1/tenants/{demoTenantId}/…`, with no `Authorization` header; `demoTenantId` is one configuration value, never a scattered literal. A `401` in the demo state routes to sign-in.
-- **Named users sign in with the SPA's own forms against Amazon Cognito (SRP)** — no hosted UI, no callback URLs, no self sign-up. Two pools: **main** (`opex-reader`, `opex-editor`; email + password) at `/sign-in`, and **admin** (`opex-admin`; email + password + authenticator-app MFA) at `/admin/sign-in`. In `LOCAL`, development identities minted with `dotnet user-jwts` stand in, behind the same auth port. Cognito issues and signs the JWTs; the UI never creates or verifies tokens.
+- **Named users sign in with the SPA's own forms against Amazon Cognito (SRP)** — no hosted UI, no callback URLs, no self sign-up. Two pools: **main** (`opex-editor`; email + password) at `/sign-in`, and **admin** (`opex-admin`; email + password + authenticator-app MFA) at `/admin/sign-in`. In `LOCAL`, development identities minted with `dotnet user-jwts` stand in, behind the same auth port. Cognito issues and signs the JWTs; the UI never creates or verifies tokens.
 - **Send the Cognito access token** (never the ID token) as the `Bearer` token on every `/v1` call except demo reads and the public access-request submission.
-- **Roles and tenants:** a main-pool token's role is its `opex-reader` or `opex-editor` group and its tenants are its `tenant-{tenantId}` groups; an admin-pool token is `opex-admin` for every tenant. Only the claims adapter in `platform/auth` reads Cognito claim names. The UI uses role and tenants only to show or hide things; `opex-web-api` enforces them.
+- **Roles and tenants:** a main-pool token's role is `opex-editor` when it holds that group, and its tenants are its `tenant-{tenantId}` groups; an admin-pool token is `opex-admin` for every tenant, whatever tenant groups it holds. Only the claims adapter in `platform/auth` reads Cognito claim names. The UI uses role and tenants only to show or hide things; `opex-web-api` enforces them.
 - **Tenant-scoped URIs.** API routes include the active tenant id in the URI, and the API validates it against the token. The UI only ever addresses a tenant the user belongs to, and must handle authorization failures (401/403) gracefully — token expiry, re-authentication, insufficient role, and tenant mismatch.
 - Treat tokens as sensitive: no logging, no exposure in URLs, and storage choices documented in the relevant LLD.
 
