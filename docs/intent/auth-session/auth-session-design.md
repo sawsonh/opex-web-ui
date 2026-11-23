@@ -85,6 +85,7 @@ Failures reject with an `AuthError`:
 ```ts
 type UserContext = {
   pool: Pool;
+  userId: string;           // the access token's `sub`; stable across email changes
   email: string;            // display only: from the ID token; the identity's label in LOCAL
   role: 'opex-editor' | 'opex-admin' | null;
   tenants: { kind: 'all' } | { kind: 'listed'; tenants: TenantId[] };
