@@ -58,7 +58,7 @@ Design: `auth-session-design.md`
 
 ## Capabilities
 
-- [ ] **AUTH-CAP-001**: The `can(user, capability, tenant)` function shall grant `viewReporting` and `viewInsights` to the demo state for demo tenants only, to an editor for their listed tenants, and to the administrator for any tenant.
+- [ ] **AUTH-CAP-001**: The `can(user, capability, tenant)` function shall grant `viewReporting` and `viewInsights` to the demo state only for the tenant named in the current `/demo/{tenantId}` route, to an editor for their listed tenants, and to the administrator for any tenant.
 - [ ] **AUTH-CAP-002**: The `can` function shall grant `viewImprovement`, `editTenantConfiguration`, `requestInsightsRun`, `giveAnomalyFeedback`, and `writeImprovementTickets` to an editor for their listed tenants and to the administrator for any tenant, and never to the demo state.
 - [ ] **AUTH-CAP-003**: The `can` function shall grant `readAccessRequests` and `manageTenants` only to the administrator.
 - [ ] **AUTH-CAP-004**: The `can` function shall grant `submitAccessRequest` in every session state.
@@ -74,8 +74,8 @@ Design: `auth-session-design.md`
 
 ## Sign-out and session end
 
-- [ ] **AUTH-END-001**: When the user signs out, the auth module shall revoke the refresh token with Cognito, clear the tab's tokens even if revocation fails, delete all form drafts in the tab, post `signed-out` on the session channel, and go to the landing page.
-- [ ] **AUTH-END-002**: When a tab receives `signed-out` on the session channel, it shall clear its tokens, delete its form drafts, and go to the landing page.
+- [ ] **AUTH-END-001**: When the user signs out and the unsaved-changes guard allows it, the auth module shall revoke the refresh token with Cognito, clear the tab's tokens even if revocation fails, delete all form drafts in the tab, post `signed-out` on the session channel, and go to the landing page.
+- [ ] **AUTH-END-002**: When a tab receives `signed-out` on the session channel, it shall clear its tokens, delete its form drafts, and go to the landing page, without prompting even if it has unsaved changes.
 - [ ] **AUTH-END-003**: When `sessionRejected()` is called or a token refresh fails in a Cognito session, the auth module shall clear the tab's tokens, keep form drafts, and navigate to the sign-in route of the session's pool with "Your session has ended. Sign in again." and the current route as return-to.
 - [ ] **AUTH-END-004**: When `demoRejected()` is called (a demo read returned 401), the application shall navigate to `/demo` with "That demo is no longer available", staying in the demo state.
 - [ ] **AUTH-END-005**: When the API answers `403`, the auth module shall keep the session.

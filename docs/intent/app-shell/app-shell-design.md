@@ -65,11 +65,11 @@ The registry is one list in `src/app/areas.ts`. Adding a dimension adds a module
 
 - The **active tenant** is the `{tenantId}` route segment. There is no other copy of it.
 - A `{tenantId}` in a `/t/` or `/demo/` route that is not 24 lowercase hexadecimal characters shows the not-found page and sends no request.
-- A route naming a tenant the user may not see (not in `listed` tenants; or, for the administrator, not in the API's tenant list) shows a not-permitted page and sends no request for that tenant.
+- A route naming a tenant the user may not see (not in `listed` tenants; or, for the administrator, not in the API's tenant list after reloading that list once) shows a not-permitted page and sends no request for that tenant.
 - Tenant choices: a main-pool user's `listed` tenants; for the administrator, the API's list of every tenant, loaded once per session. If that list fails to load, tenant routes show the failure with a retry, while `/admin/access-requests` and `/admin/tenants`, which need no active tenant, stay usable.
 - Tenants are shown by name: from the administrator's tenant list, or for an editor from the API's details for each of their tenants. Until a name has loaded, or if it fails to load, the tenant id is shown.
-- **Public demo marker**: when a signed-in user's active tenant has type `DEMO`, the top bar shows a "Public demo" badge beside the tenant name, explaining that anyone can view this tenant's reporting data and insights without signing in. It stays visible on every area of that tenant.
-- **Switcher**: shown only when the user has more than one tenant. It is a searchable list. Switching keeps the current area and date range.
+- **Public demo marker**: when a signed-in user's active tenant is known to have type `DEMO`, the top bar shows a "Public demo" badge beside the tenant name, explaining that anyone can view this tenant's reporting data and insights without signing in. It stays visible on every area of that tenant. While the type is unknown (not loaded, or failed to load), no badge is shown and nothing is blocked.
+- **Switcher**: shown only when the user has more than one tenant choice — or, in the demo, more than one demo tenant. It is a searchable list. Switching, signed in or in the demo, keeps the current area and date range.
 - **Default tenant** on arriving at home: the tenant last used in this browser, if the user may still see it; otherwise the first tenant in the user's list. The last-used tenant is a per-browser convenience in `localStorage`, read and written defensively; losing it only changes the default.
 
 ## Date Range

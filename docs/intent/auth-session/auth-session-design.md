@@ -113,7 +113,7 @@ can(user: UserContext | 'demo', capability: Capability, tenant: TenantId): boole
 
 | Capability | demo | editor | admin |
 |---|---|---|---|
-| `viewReporting`, `viewInsights` | demo tenant only | listed tenants | any |
+| `viewReporting`, `viewInsights` | the tenant in the current `/demo/{tenantId}` route (already checked against the demo-tenant list by the shell) | listed tenants | any |
 | `viewImprovement` | — | listed tenants | any |
 | `editTenantConfiguration`, `requestInsightsRun`, `giveAnomalyFeedback`, `writeImprovementTickets` | — | listed tenants | any |
 | `readAccessRequests`, `manageTenants` (list and create tenants) | — | — | ✓ |

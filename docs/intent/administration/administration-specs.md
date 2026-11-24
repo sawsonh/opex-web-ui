@@ -6,8 +6,8 @@ Design: `administration-design.md`
 
 - [ ] **ADMIN-SET-001**: The Settings area descriptor shall have id `tenant-administration`, group `administration`, capability `editTenantConfiguration`, `availableInDemo: false`, and `usesDateRange: false`, at `/t/{tenantId}/settings`.
 - [ ] **ADMIN-SET-002**: The Settings page shall show one section per source system in the registry, in registry order, each a separate form with key `tenant-config/{sourceSystem}` and its own save controls.
-- [ ] **ADMIN-SET-003**: The Settings page header shall show the tenant's name and type.
-- [ ] **ADMIN-SET-004**: When the tenant's type is `DEMO`, the Settings page shall show above its sections "This is a public demo tenant. Anyone can view its reporting data and insights without signing in."
+- [ ] **ADMIN-SET-003**: The Settings page header shall show the tenant's name and type, showing "—" for the type while it is unknown, without blocking the page.
+- [ ] **ADMIN-SET-004**: When the tenant's type is known to be `DEMO`, the Settings page shall show above its sections "This is a public demo tenant. Anyone can view its reporting data and insights without signing in."
 - [ ] **ADMIN-SET-005**: The source-system registry shall declare GitHub (repository, `owner/name`, `^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$`), SonarQube (project key, `^[A-Za-z0-9_.:-]+$`), Jira (project key, `^[A-Z][A-Z0-9_]+$`), and PagerDuty (service ID, `^P[A-Z0-9]{6}$`), each with its label, item noun, identifier hint, and identifier format.
 
 ## Settings: editing a source system
@@ -30,7 +30,7 @@ Design: `administration-design.md`
 - [ ] **ADMIN-TEN-003**: Wherever Tenant Administration shows a tenant's type, it shall be read-only, with a note that the type is changed only by hand in MongoDB Atlas.
 - [ ] **ADMIN-TEN-004**: The New tenant form shall require a name, and a type chosen from `Customer`, `Sandbox`, and `Demo` with no option preselected; submitting without a type shall show "Choose a tenant type".
 - [ ] **ADMIN-TEN-005**: When the administrator submits the New tenant form with type `Demo`, the form shall first ask "Create a public demo tenant? Anyone will be able to view {name}'s reporting data and insights without signing in." and send the request only if confirmed.
-- [ ] **ADMIN-TEN-006**: When the API confirms a new tenant, the Tenants page shall show its name, type, and tenant id, the instruction to create the Cognito group `tenant-{tenantId}` in the main user pool and add the tenant's editors to it, a copy button for the group name, and a link to the tenant's Settings.
+- [ ] **ADMIN-TEN-006**: When the API confirms a new tenant, Tenant Administration shall invalidate the administrator's tenant list, and the Tenants page shall show its name, type, and tenant id, the instruction to create the Cognito group `tenant-{tenantId}` in the main user pool and add the tenant's editors to it, a copy button for the group name, and a link to the tenant's Settings.
 
 ## Layers
 

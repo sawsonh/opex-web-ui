@@ -33,7 +33,8 @@ Design: `forms-design.md`
 
 - [ ] **FORM-GUARD-001**: While a form is dirty (its values differ from the last confirmed values), navigating elsewhere in the app shall ask "Discard unsaved changes?" with "Stay" and "Discard".
 - [ ] **FORM-GUARD-002**: While a form is dirty, closing or reloading the tab shall trigger the browser's leave-page prompt.
-- [ ] **FORM-GUARD-003**: The unsaved-changes guard shall not prompt after a confirmed save, nor when the session ends and the application navigates to sign-in.
+- [ ] **FORM-GUARD-003**: The unsaved-changes guard shall not prompt after a confirmed save, when the session ends and the application navigates to sign-in, or when another tab signs out.
+- [ ] **FORM-GUARD-004**: When the user chooses "Sign out" while a form is dirty, the unsaved-changes guard shall ask "Discard unsaved changes?", and "Stay" shall cancel the sign-out.
 
 ## Drafts
 

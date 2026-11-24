@@ -40,7 +40,7 @@ Settings · acme
 
 One section per source system, in a fixed order. Each section is its own form (`formKey: tenant-config/{sourceSystem}`) with its own save bar.
 
-The page header shows the tenant's name and type. For a `DEMO` tenant, a banner above the sections reads "This is a public demo tenant. Anyone can view its reporting data and insights without signing in."
+The page header shows the tenant's name and type, or "—" while the type is unknown. For a tenant known to be `DEMO`, a banner above the sections reads "This is a public demo tenant. Anyone can view its reporting data and insights without signing in."
 
 ## Source-System Registry
 
@@ -96,7 +96,7 @@ Tenants                                                     [New tenant]
   - **Name**: required; length limit from the OAS when it declares one, through Forms' counter.
   - **Type**: required radio group with no option preselected — `Customer`, `Sandbox` ("behaves like Customer; for testing"), and `Demo` ("its reporting data and insights are visible to anyone without signing in"). Submitting without a choice shows "Choose a tenant type".
 - **Creating a `DEMO` tenant** asks for confirmation before the request is sent: "Create a public demo tenant? Anyone will be able to view {name}'s reporting data and insights without signing in."
-- **After creation** (confirmed by the API), the page shows the new tenant's name, type, and id, and the remaining manual step: "Create the Cognito group `tenant-{tenantId}` in the main user pool and add the tenant's editors to it", with a copy button for the group name, and a link to the new tenant's Settings.
+- **After creation** (confirmed by the API), the administrator's tenant list is refreshed, so the shell's switcher and tenant checks include the new tenant, and the page shows the new tenant's name, type, and id, and the remaining manual step: "Create the Cognito group `tenant-{tenantId}` in the main user pool and add the tenant's editors to it", with a copy button for the group name, and a link to the new tenant's Settings.
 
 ## Layers
 

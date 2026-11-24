@@ -70,7 +70,8 @@ Business-rule limits (HLD § Business rules) are part of a form's Zod schema, us
 - A form is *dirty* when its values differ from the last confirmed values.
 - Navigating away inside the app (React Router blocker) while dirty asks "Discard unsaved changes?" with "Stay" and "Discard".
 - Closing or reloading the tab while dirty triggers the browser's `beforeunload` prompt.
-- The guard does not fire after a successful save, and does not fire for the redirect to sign-in when a session ends — the draft covers that case.
+- Choosing "Sign out" while a form is dirty asks the same question first; "Stay" cancels the sign-out.
+- The guard does not fire after a successful save, and does not fire for the redirect to sign-in when a session ends — the draft covers that case. It also does not fire when another tab signs out: a deliberate sign-out clears everything, including unsaved input, so nothing is left behind on a shared machine.
 
 ## Drafts
 

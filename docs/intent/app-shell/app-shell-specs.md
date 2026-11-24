@@ -33,13 +33,13 @@ Design: `app-shell-design.md`
 
 - [ ] **SHELL-TENANT-001**: When a `/t/` or `/demo/` route's `{tenantId}` is not 24 lowercase hexadecimal characters, the App Shell shall show the not-found page and send no request.
 - [ ] **SHELL-TENANT-002**: When a signed-in editor opens a `/t/{tenantId}` route for a tenant not in their listed tenants, the App Shell shall show a not-permitted page and send no request for that tenant.
-- [ ] **SHELL-TENANT-003**: When the administrator opens a `/t/{tenantId}` route for a tenant not in the API's tenant list, the App Shell shall show a not-permitted page and send no further request for that tenant.
+- [ ] **SHELL-TENANT-003**: When the administrator opens a `/t/{tenantId}` route for a tenant not in the loaded tenant list, the App Shell shall reload the tenant list once, and only if the tenant is still absent show a not-permitted page and send no further request for that tenant.
 - [ ] **SHELL-TENANT-004**: While the administrator is signed in, the App Shell shall load the API's tenant list once per session as the administrator's tenant choices.
 - [ ] **SHELL-TENANT-005**: If the administrator's tenant list fails to load, then `/t/` routes shall show the failure with a retry, while `/admin/access-requests` and `/admin/tenants` remain usable.
 - [ ] **SHELL-TENANT-006**: The App Shell shall show each tenant by its name from the API, and by its tenant id until the name has loaded or if it fails to load.
-- [ ] **SHELL-TENANT-007**: While the session is `signedIn` and the active tenant's type is `DEMO`, the top bar shall show a "Public demo" badge beside the tenant name, on every area of that tenant, explaining that anyone can view its reporting data and insights without signing in.
+- [ ] **SHELL-TENANT-007**: While the session is `signedIn` and the active tenant's type is known to be `DEMO`, the top bar shall show a "Public demo" badge beside the tenant name, on every area of that tenant, explaining that anyone can view its reporting data and insights without signing in; while the type is unknown, it shall show no badge and block nothing.
 - [ ] **SHELL-TENANT-008**: While the session is `signedIn`, the App Shell shall show the tenant switcher only when the user has more than one tenant choice, as a searchable list.
-- [ ] **SHELL-TENANT-009**: When the user switches tenant, the App Shell shall keep the current area and date range.
+- [ ] **SHELL-TENANT-009**: When the user switches tenant, in the `signedIn` or `demo` state, the App Shell shall keep the current area and date range.
 - [ ] **SHELL-TENANT-010**: When a signed-in user arrives at home, the App Shell shall choose as active tenant the tenant last used in this browser if the user may still see it, and otherwise the first of the user's tenant choices.
 - [ ] **SHELL-TENANT-011**: If reading or writing the last-used tenant in `localStorage` fails, then the App Shell shall fall back to the first tenant choice without error.
 
