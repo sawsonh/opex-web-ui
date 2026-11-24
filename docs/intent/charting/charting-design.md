@@ -7,7 +7,7 @@ prefix: CHART
 
 ## Context and Design Philosophy
 
-Every reporting dimension shows metrics as interactive charts. Charting is the shared layer that turns a dimension's metric series into Plotly.js charts that look, behave, and label data quality the same way everywhere. It is the only module that imports Plotly.
+Every reporting dimension shows metrics as interactive charts. Charting is the shared layer that turns a dimension's metric series into Plotly.js charts that look, behave, and label data quality the same way everywhere, and it provides the dimension page kit — the tiles, source-item table, and comparison every dimension page is built from. It is the only module that imports Plotly.
 
 Principles:
 
@@ -20,7 +20,7 @@ Principles:
 ```ts
 type ChartSpec = {
   title: string;
-  kind: 'line' | 'bar' | 'stackedBar' | 'scatter';
+  kind: 'line' | 'bar' | 'stackedBar' | 'scatter' | 'pie';
   unit: Unit;                       // 'count' | 'percent' | 'duration' | 'ratio'
   series: Series[];
   asOf: Instant | null;             // when the data was last aggregated, from the API
@@ -35,9 +35,23 @@ type Series = {
 };
 
 type Point =
-  | { x: CalendarDate | number; y: number; partial: boolean; ref?: PointRef }
-  | { x: CalendarDate | number; y: null };          // no data for this bucket
+  | {
+      x: CalendarDate | number | string;  // bucket date, numeric value, or category (pie slices)
+      y: number;
+      partial: boolean;
+      share?: number;                     // the API's share of the whole, 0–100 (pie slices)
+      sampleSize?: { count: number; noun: string };  // e.g. { count: 14, noun: 'PR' }
+      details?: { label: string; value: string }[];  // extra hover lines, e.g. repository, PR title
+      link?: { label: string; href: string };        // external link, e.g. 'Open in GitHub'
+      ref?: PointRef;
+    }
+  | { x: CalendarDate | number | string; y: null };  // no data for this bucket
 ```
+
+- `sampleSize` appears in the hover as "based on 14 PRs" (the noun pluralized). It is shown only when the API provides it.
+- `details` lines appear in the hover after the value, in order.
+- `link` is offered when the point is clicked, as a plain link opening in a new tab with `rel="noopener noreferrer"`; Charting makes no request to it.
+- A `pie` spec has exactly one series, whose points are the slices. Slice percentages shown are the API's `share`; Plotly's own percentage computation is turned off. A slice without `share` shows its count only.
 
 `ChartSpec`, `Unit`, the formatters, and the color assignment are plain TypeScript in `shared/charting/model` with no Plotly or React import, so dimensions can build and unit-test specs without a DOM. The Plotly mapping and React components live in `shared/charting/plotly` and `shared/charting/ui`.
 
@@ -78,18 +92,42 @@ Whether data is partial, missing, or stale is the API's determination. Charting 
 ## Colors
 
 - One categorical palette of 8 colors, distinguishable under common color-vision deficiencies. Colors are assigned by `Series.id` in order of first appearance on the page, so the same series keeps its color across the charts of a panel.
-- Two semantic colors for direction-of-change indicators (better / worse), always paired with an arrow and text, never color alone. Which direction is better is supplied by the dimension.
+- Direction-of-change indicators take the metric's direction from the dimension: `higher` or `lower` is better, or `neutral`. For `higher` and `lower`, the indicator uses two semantic colors (better / worse), always paired with an arrow and the text "better" or "worse", never color alone. For `neutral`, it shows the arrow and "up" or "down" in a neutral color, with no judgment.
 - Partial and missing styles never rely on color alone.
 
 ## Plotly Integration
 
-- Plotly is loaded as the `plotly.js-basic-dist-min` bundle (scatter, bar), in its own lazily loaded chunk, so routes without charts do not download it.
+- Plotly is loaded as the `plotly.js-basic-dist-min` bundle (scatter, bar, pie), in its own lazily loaded chunk, so routes without charts do not download it.
 - `PlotlyChart` is a thin React component that calls `Plotly.react` on spec changes, `Plotly.purge` on unmount, and resizes with a `ResizeObserver`. It is the only component that touches Plotly's API.
 - Charts render with `responsive: true`, the shared layout template (font, margins, grid, axis styles), and `displaylogo: false`.
 
 ## Panel States
 
 `ChartPanel` wraps a chart with the states every dimension needs, so they read the same everywhere: loading (skeleton at the chart's size), error (from `ApiError`, with retry), empty, and loaded with the quality labels above.
+
+## Dimension Page Kit
+
+Every reporting dimension page is assembled from the same parts, in `shared/charting/dimension`. A dimension supplies its metric definitions and data; the kit supplies layout and behavior.
+
+```ts
+type DimensionMetric = {
+  id: string;                    // e.g. 'cq.bugs'
+  label: string;
+  unit: Unit;
+  direction: 'higher' | 'lower' | 'neutral';
+  aggregation: 'snapshot' | 'flow';  // tile wording: "latest" vs "total for range"
+};
+```
+
+| Part | Behavior |
+|---|---|
+| `DimensionPage` | Title line (dimension · tenant · resolved date range), granularity control, tiles, panels, source-item table, in that order |
+| `MetricTiles` | One tile per metric: the API's latest value (`snapshot`) or total for the range (`flow`), and the API's change over the range with the direction indicator. "—" for a value the API did not provide; no indicator when it provides no change. |
+| `SourceItemTable` | One row per source item (SonarQube project, repository, Jira project, PagerDuty service, …) with the API's values per metric; sortable by any column, with the dimension's default sort; "—" for missing values and "No data" for an item with no data in the range |
+| Comparison | Checking a row in `SourceItemTable` adds that item's series to every time-series panel beside the tenant-level series; unchecking removes it. Up to 5 items at once; at 5, unchecked rows are disabled with the reason. Selection is in the query string (`compare=`), so it is shareable, and is cleared on tenant switch. |
+| `GranularityControl` | Day, week, month, or sprint, limited to what the API supports for the range; in the query string (`granularity=`); falls back to the API's default when the current value is unsupported |
+| `NoSourceItems` | "No {source items} are configured for this tenant", with a link to tenant configuration for users with `editTenantConfiguration` |
+| `OpenRcaTicket` | Panel-menu and point-click action shown only when `can(user, 'writeImprovementTickets', tenant)`; navigates to the Improvement area's new-ticket route with a `MetricRef` |
 
 ## Decisions & Alternatives
 
@@ -101,6 +139,9 @@ Whether data is partial, missing, or stale is the API's determination. Charting 
 | Missing values | Gaps | Zero-fill; interpolate | Zero and interpolated values are values the API never returned. |
 | Accessible alternative | "Show table" per chart | Only `aria-label` summaries | Analysts and screen-reader users both need exact values; the table serves both and doubles as a copy source. |
 | Bucket date labels | Displayed as calendar dates, unconverted | Convert bucket starts to local time | A bucket names a day, not an instant; converting would shift labels across midnight for some viewers. |
+| Pie percentages | The API's `share` | Plotly's computed percentages | A share is a derived number; the API owns it. |
+| Neutral direction | A third direction with no better/worse wording | Force every metric to `higher` or `lower` | Some metrics (ticket counts, comment ratios) are healthy or worrying only in context; judging them is `opex-insights-workflow`'s job. |
+| Home of the dimension page kit | Charting (`shared/charting/dimension`) | Code Quality's `ui` layer; per-dimension copies | All dimensions use it; areas cannot import each other; one implementation keeps the pages consistent. |
 
 ## Open Questions & Future Decisions
 

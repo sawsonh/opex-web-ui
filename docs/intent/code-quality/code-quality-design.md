@@ -48,11 +48,12 @@ Code Quality · acme · Last 30 days (24 Jul – 22 Aug 2026)        Granularity
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-- **Summary tiles**: the latest value in the range and the API's change over the range, with an arrow and "better"/"worse" text derived from the metric's direction. A tile shows "—" for a value the API did not provide, and no change indicator when the API provides no change.
-- **Time-series panels**: one `ChartPanel` per metric, tenant level, built as a `ChartSpec`. Selecting a project in the table adds that project's series to every panel for comparison; selecting it again removes it. Up to 5 projects can be compared at once.
-- **By project table**: one row per SonarQube project with the latest values, sortable by any column, default sort by Bugs descending. Values the API did not return are "—".
-- **Granularity**: day, week, or month, limited to the granularities the API supports for the range. The choice is a query-string parameter (`granularity`), defaulting to the API's default for the range.
-- **Open RCA ticket**: for users with `writeImprovementTickets` on the tenant, each panel's menu and each clicked point offer "Open RCA ticket", which navigates to the Improvement area's new-ticket route with a `MetricRef` (metric id, tenant, date range, optional project and point). Not shown in the demo.
+The page is built from Charting's dimension page kit: `MetricTiles` (all five metrics are `snapshot`), one `ChartPanel` per metric at tenant level, `SourceItemTable` of SonarQube projects with comparison, `GranularityControl`, `NoSourceItems`, and `OpenRcaTicket`. Code Quality supplies:
+
+- its metric definitions (the table above, as `DimensionMetric`s);
+- the source-item table's default sort: Bugs descending;
+- the severity breakdown panels for Bugs and Vulnerabilities when the API provides them;
+- the `MetricRef` for "Open RCA ticket": metric id, tenant, date range, and optionally the project and point.
 
 ## Layers
 
@@ -61,7 +62,7 @@ Code Quality · acme · Last 30 days (24 Jul – 22 Aug 2026)        Granularity
 | `domain/` | `CodeQualityMetricId`, the metric table above (labels, units, direction), `CodeQualityOverview` (tiles, tenant series, per-project rows), the rule turning a change and direction into better/worse/unchanged. No React, Plotly, or HTTP. |
 | `application/` | `CodeQualityRepository` port; `loadOverview(tenant, range, granularity)`; `toChartSpecs(overview, selectedProjects)` building Charting specs from the domain model. |
 | `infrastructure/` | Adapter implementing the port with the generated client; maps API DTOs to domain types, including null values, partial flags, `asOf`, and staleness. Unknown metric ids from the API are ignored, not shown. |
-| `ui/` | Page, tiles, panels, project table, granularity control; TanStack Query hooks keyed by tenant, range, and granularity. |
+| `ui/` | Page composed from the dimension page kit; TanStack Query hooks keyed by tenant, range, granularity, and comparison. |
 
 - The area descriptor: `id: 'code-quality'`, group `dimensions`, capability `viewReporting`, `availableInDemo: true`, `usesDateRange: true`.
 - The Code Quality read routes are added to the API Client's `DEMO_READ_ROUTES`.
@@ -69,7 +70,7 @@ Code Quality · acme · Last 30 days (24 Jul – 22 Aug 2026)        Granularity
 ## Data States
 
 - Loading, error, empty, partial, and stale data are presented through Charting's `ChartPanel` and the quality rules there.
-- A tenant whose configuration collects no SonarQube projects shows "No SonarQube projects are configured for this tenant" in place of the panels, with a link to tenant configuration for users with `editTenantConfiguration`.
+- A tenant whose configuration collects no SonarQube projects shows `NoSourceItems` ("No SonarQube projects are configured for this tenant") in place of the panels.
 - A project that is in the API's results but has no data in the range is listed with "No data" rather than omitted.
 
 ## Decisions & Alternatives
@@ -77,7 +78,6 @@ Code Quality · acme · Last 30 days (24 Jul – 22 Aug 2026)        Granularity
 | Decision | Chosen | Alternatives Considered | Rationale |
 |---|---|---|---|
 | Tenant totals and change | From the API | Sum projects / subtract in the browser | Coverage and duplication cannot be summed, and even counts would define the metric in two places. |
-| Project comparison | Overlay selected projects on tenant panels, max 5 | Small multiples per project; a separate project page | Overlays keep the comparison on one time axis; five series stays readable with the 8-color palette. |
 | Severity breakdown | Stacked bars when the API provides it | Always a single series | Severity drives triage of bugs and vulnerabilities, but only the API can say how issues split. |
 | Coverage naming | "Code Coverage (SonarQube)" | "Code Coverage" | Two dimensions report coverage from different origins; the label must say which. |
 | Unknown metrics in responses | Ignored | Rendered generically | A metric needs a label, unit, and direction defined here before it can be presented honestly. |
