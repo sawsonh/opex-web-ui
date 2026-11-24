@@ -34,7 +34,7 @@ Route: `/request-access`, linked from the landing page, the demo indicator, the 
 - Submission is `POST /v1/access-requests` with no `Authorization` header in every session state (API Client rule). The form uses Forms' confirmed-save flow, keeps no drafts, and is disabled while submitting.
 - **Accepted** (any 2xx): the form is replaced by "Thanks — your request has been sent. If it's approved, you'll receive an email with a temporary password." with a link back to where the user came from. The confirmation does not echo the submitted values.
 - **Validation errors** (400/422): shown against fields; input kept.
-- **Rate limited** (429): "Too many requests — try again in {n} minutes" (or "later" without `Retry-After`); input kept.
+- **Rate limited** (429): Forms' rate-limited message; input kept.
 - **Network or server failure**: input kept, retry offered.
 
 ## Administrator's List

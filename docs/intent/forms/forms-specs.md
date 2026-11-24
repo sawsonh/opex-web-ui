@@ -16,7 +16,7 @@ Design: `forms-design.md`
 - [ ] **FORM-SAVE-004**: When a save is rejected as `validation`, the form shall keep every value, show each API field error on the field that `fieldPathForApiError` maps it to, and list errors it cannot map in the `ErrorSummary`.
 - [ ] **FORM-SAVE-005**: When a save is rejected as `conflict`, the form shall keep every value, state that the record changed since it was opened, and offer "Load latest version", which replaces the form's values with the API's current record only after the user confirms.
 - [ ] **FORM-SAVE-006**: If a save fails as `network` or `server`, then the form shall keep every value, show "Couldn't reach OpEx" or "OpEx couldn't save this" respectively, and offer "Retry", which resubmits the same values.
-- [ ] **FORM-SAVE-007**: If a save fails as `rateLimited`, then the form shall keep every value, show "Too many requests — try again in {n} s" when `retryAfterSeconds` is known, and disable "Retry" until that time has passed.
+- [ ] **FORM-SAVE-007**: If a save fails as `rateLimited`, then the form shall keep every value and, when `retryAfterSeconds` is known, show "Too many requests — try again in {duration}" (in seconds below one minute, otherwise in whole minutes rounded up) and disable "Retry" until that time has passed; when it is not known, show "Too many requests — try again later".
 - [ ] **FORM-SAVE-008**: If a save fails as `forbidden`, then the form shall keep every value, show "Your account isn't permitted to do this", and offer no retry.
 - [ ] **FORM-SAVE-009**: The form shall never merge the API's current record into the user's values automatically.
 

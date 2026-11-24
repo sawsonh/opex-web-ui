@@ -54,7 +54,7 @@ editing ──submit──▶ client validation ──fails──▶ editing (er
 - **Saved**: the form resets to `toValues(saved)` so what is displayed is the API's record. The area's mutation invalidates the queries the write affects, and other views refetch. A polite live region announces "Saved".
 - **Rejected**: API field errors are placed on fields via `fieldPathForApiError`; errors it cannot place appear in the `ErrorSummary` at the top of the form. The summary lists every error as a link to its field, and focus moves to it.
 - **Conflict**: the form keeps the user's values and offers "Load latest version", which, after confirmation, replaces the form values with the current record from the API. Nothing is merged automatically.
-- **Failed**: the message depends on the `ApiError` kind — network ("Couldn't reach OpEx"), server ("OpEx couldn't save this"), rate limited ("Too many requests — try again in {n} s", retry disabled until then), forbidden ("Your account isn't permitted to do this", no retry).
+- **Failed**: the message depends on the `ApiError` kind — network ("Couldn't reach OpEx"), server ("OpEx couldn't save this"), rate limited ("Too many requests — try again in {duration}" with the wait in seconds or minutes and retry disabled until then, or "Too many requests — try again later" when the API gives no `Retry-After`), forbidden ("Your account isn't permitted to do this", no retry).
 - `unauthorized` does not reach the form: Auth & Session ends the session and the draft carries the input across sign-in.
 
 ## Length and Count Limits
