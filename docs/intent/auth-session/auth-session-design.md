@@ -143,7 +143,7 @@ any tab signs out ── {type:'signed-out'} ──▶ every tab clears tokens �
 ## Session Expiry and API Rejection
 
 - `sessionRejected()` (the API returned 401 after a forced refresh) and a failed refresh both end the session: tokens are cleared in this tab, and the user is sent to the sign-in route of the session's pool with "Your session has ended. Sign in again." and a return-to path.
-- `demoRejected()` (the API answered a demo read with 401, meaning the tenant is no longer anonymously readable) clears the API Client's cached demo-tenant list and sends the visitor to `/demo` with "That demo is no longer available". The visitor stays in the demo state; `/demo` offers "Sign in" for members.
+- `demoRejected()` (the API answered a demo read with 401, meaning the tenant is no longer anonymously readable; the API Client has already cleared its cached demo-tenant list) sends the visitor to `/demo` with "That demo is no longer available". The visitor stays in the demo state; `/demo` offers "Sign in" for members.
 - The return-to path is accepted only if it is a same-origin relative path beginning with `/` and not `//`; otherwise the user lands on their home.
 - Ending a session this way keeps form drafts so the user can resume after signing in again (see Forms). Signing out, in any tab, discards them along with the tokens.
 - A `403` never ends the session. The calling view shows that the action is not permitted for this account (see App Shell).

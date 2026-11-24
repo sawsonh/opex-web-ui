@@ -82,7 +82,7 @@ demo request ──▶ 401 ──▶ invalidateDemoTenants(); demoRejected(); re
 
 - The retry replays a clone of the original request, taken before the first send, so request bodies survive.
 - Concurrent requests that receive 401 share one forced refresh rather than each refreshing.
-- What `sessionRejected` and `demoRejected` do (end the session, route to sign-in) is Auth & Session's.
+- What `sessionRejected` and `demoRejected` do (end the session and route to sign-in; return the visitor to the demo picker) is Auth & Session's.
 
 ## Error Mapping
 
