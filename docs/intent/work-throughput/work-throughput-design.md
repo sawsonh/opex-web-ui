@@ -31,7 +31,7 @@ Breakdown items are Jira projects, labeled by project key and name. Default sort
 
 | Layer | Specific contents |
 |---|---|
-| `domain/` | `WorkThroughputMetricId`, the metric table, flow-vs-snapshot flag used for tile wording |
+| `domain/` | `WorkThroughputMetricId`, the metric table, each metric's tile aggregation (`flow` for Tickets Closed, `range` for WIP Cycle Time) |
 | `application/` | `WorkThroughputRepository` port; `loadOverview`; `toChartSpecs` |
 | `infrastructure/` | Adapter over the generated client |
 | `ui/` | Page composed from Charting's dimension page kit |

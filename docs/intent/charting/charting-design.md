@@ -12,7 +12,7 @@ Every reporting dimension shows metrics as interactive charts. Charting is the s
 Principles:
 
 - **Dimensions describe, Charting draws.** A dimension builds a `ChartSpec` from its domain data — series, units, chart kind — and Charting renders it. Dimensions never build Plotly traces or layouts, so a convention changes in one place.
-- **Never make data look better than it is.** A missing value is a gap, not a zero and not an interpolation. A partial period looks different from a complete one. Data freshness is always stated. (HLD tenet: accuracy over availability.)
+- **Never make data look better than it is.** A missing value is a gap, not a zero and not an interpolation. A partial period looks different from a complete one. Data freshness is stated whenever the API provides it. (HLD tenet: accuracy over availability.)
 - **Exact on demand.** Charts are dense; hover, the data table, and axis labels give the exact API value with its unit and period. (HLD tenet: analyst depth.)
 
 ## `ChartSpec`
@@ -63,7 +63,7 @@ type Point =
 | Point with `partial: true` | Hollow marker, dashed segment into it; bar with hatch pattern | Hover: "Partial period — {period} is not complete"; legend note "Hollow / hatched = partial period" |
 | Every point null, or no points | No chart; empty panel | "No data for this date range" and the date range |
 | `stale: true` | Chart drawn normally | Warning bar above the chart: "Data may be out of date — last updated {asOf}" |
-| Always | — | Footer: "Data as of {asOf}" in the user's local time zone, or "Data as of: unknown" when `asOf` is null |
+| `asOf` provided | — | Footer: "Data as of {asOf}" in the user's local time zone; no footer when `asOf` is null |
 
 Whether data is partial, missing, or stale is the API's determination. Charting never infers it — for example, it does not decide the current week is partial because today is mid-week — and when the API sends no such flags, Charting adds no warning of its own.
 
@@ -115,14 +115,14 @@ type DimensionMetric = {
   label: string;
   unit: Unit;
   direction: 'higher' | 'lower' | 'neutral';
-  aggregation: 'snapshot' | 'flow';  // tile wording: "latest" vs "total for range"
+  aggregation: 'snapshot' | 'flow' | 'range';  // tile shows: latest value / total for range / the API's value for the whole range
 };
 ```
 
 | Part | Behavior |
 |---|---|
 | `DimensionPage` | Title line (dimension · tenant · resolved date range), granularity control, tiles, panels, source-item table, in that order |
-| `MetricTiles` | One tile per metric: the API's latest value (`snapshot`) or total for the range (`flow`), and the API's change over the range with the direction indicator. "—" for a value the API did not provide; no indicator when it provides no change. |
+| `MetricTiles` | One tile per metric: the API's latest value (`snapshot`), its total for the range (`flow`), or its value computed over the whole range (`range` — e.g. the median cycle time across every pull request in the range), and the API's change over the range with the direction indicator. "—" for a value the API did not provide; no indicator when it provides no change. |
 | `SourceItemTable` | One row per source item (SonarQube project, repository, Jira project, PagerDuty service, …) with the API's values per metric; sortable by any column, with the dimension's default sort; "—" for missing values and "No data" for an item with no data in the range |
 | Comparison | Checking a row in `SourceItemTable` adds that item's series to every time-series panel beside the tenant-level series; unchecking removes it. Up to 5 items at once; at 5, unchecked rows are disabled with the reason. Selection is in the query string (`compare=`), so it is shareable, and is cleared on tenant switch. |
 | `GranularityControl` | Day, week, month, or sprint, limited to what the API supports for the range; in the query string (`granularity=`); falls back to the API's default when the current value is unsupported |
