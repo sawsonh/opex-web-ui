@@ -46,24 +46,29 @@ The registry is one list in `src/app/areas.ts`. Adding a dimension adds a module
 | Route | State | Shows |
 |---|---|---|
 | `/` | none | Landing page: what OpEx is; "View demo", "Sign in", "Request access". Signed-in tabs are redirected to their home. |
-| `/demo` → `/demo/{area}` | demo | Demo tenant, areas with `availableInDemo`. `/demo` redirects to the first demo area. |
+| `/demo` | demo | Loads the demo-tenant list. One demo tenant: redirects to `/demo/{tenantId}`. Several: a picker listing them by name, in the API's order. None: "No demo is available right now" with "Sign in" and "Request access". Arriving here after a demo read was rejected adds "That demo is no longer available". |
+| `/demo/{tenantId}` → `/demo/{tenantId}/{area}` | demo | A demo tenant's areas with `availableInDemo`; redirects to the first. A `tenantId` not in the demo-tenant list shows a not-found page and sends no reads. |
 | `/sign-in`, `/admin/sign-in`, `/sign-in/forgot`, `/admin/sign-in/forgot` | none | Sign-in pages (Auth & Session) |
 | `/request-access` | any | Access-request form (Access Requests) |
 | `/t/{tenantId}` → `/t/{tenantId}/{area}` | signedIn | The tenant's areas the user may see. `/t/{tenantId}` redirects to the first permitted area. |
 | `/admin/access-requests` | signedIn (admin) | Administrator's request list (Access Requests) |
+| `/admin/tenants` | signedIn (admin) | Tenant list and tenant creation (Tenant Administration) |
 | `/account/password` | signedIn (Cognito pools) | Change password (Auth & Session) |
 | anything else | any | Not-found page with a link home |
 
 - **Home** for a signed-in user is `/t/{activeTenant}`; for a main-pool user with no role or no tenants, the "no access yet" page.
-- The demo routes use `/demo`, not `/t/{demoTenantId}`, so the demo tenant's id never appears in a URL and a demo link behaves the same for any visitor.
+- Demo routes live under `/demo/{tenantId}`, separate from `/t/{tenantId}`, so the session state is derivable from the route, and a demo link opens the same demo for any visitor. When there are several demo tenants, the top bar shows a demo-tenant switcher in place of the tenant switcher.
 - Areas are lazy-loaded per route. Administrator-only areas are in chunks that other users never request.
 - A route that requires `signedIn` opened in `none` or `demo` goes to `/sign-in` with the route as return-to.
 
 ## Tenant Selection
 
 - The **active tenant** is the `{tenantId}` route segment. There is no other copy of it.
+- A `{tenantId}` in a `/t/` or `/demo/` route that is not 24 lowercase hexadecimal characters shows the not-found page and sends no request.
 - A route naming a tenant the user may not see (not in `listed` tenants; or, for the administrator, not in the API's tenant list) shows a not-permitted page and sends no request for that tenant.
-- Tenant choices: a main-pool user's `listed` tenants; for the administrator, the API's list of every tenant, loaded once per session. If that list fails to load, tenant routes show the failure with a retry, while `/admin/access-requests`, which needs no tenant, stays usable.
+- Tenant choices: a main-pool user's `listed` tenants; for the administrator, the API's list of every tenant, loaded once per session. If that list fails to load, tenant routes show the failure with a retry, while `/admin/access-requests` and `/admin/tenants`, which need no active tenant, stay usable.
+- Tenants are shown by name: from the administrator's tenant list, or for an editor from the API's details for each of their tenants. Until a name has loaded, or if it fails to load, the tenant id is shown.
+- **Public demo marker**: when a signed-in user's active tenant has type `DEMO`, the top bar shows a "Public demo" badge beside the tenant name, explaining that anyone can view this tenant's reporting data and insights without signing in. It stays visible on every area of that tenant.
 - **Switcher**: shown only when the user has more than one tenant. It is a searchable list. Switching keeps the current area and date range.
 - **Default tenant** on arriving at home: the tenant last used in this browser, if the user may still see it; otherwise the first tenant in the user's list. The last-used tenant is a per-browser convenience in `localStorage`, read and written defensively; losing it only changes the default.
 
@@ -72,8 +77,8 @@ The registry is one list in `src/app/areas.ts`. Adding a dimension adds a module
 Shown in the top bar for areas with `usesDateRange`, and carried in the query string so it is shared by every such area:
 
 ```
-/t/acme/code-quality?range=last-30-days
-/t/acme/code-quality?from=2026-08-01&to=2026-08-31
+/t/6b0480d6e2f81b78584bc4d6/code-quality?range=last-30-days
+/t/6b0480d6e2f81b78584bc4d6/code-quality?from=2026-08-01&to=2026-08-31
 ```
 
 Pure domain logic in `shared/domain` (`DateRange`, `DateRangePreset`, `resolvePreset(preset, today)`), with no React or browser dependency.
@@ -111,7 +116,7 @@ Pure domain logic in `shared/domain` (`DateRange`, `DateRangePreset`, `resolvePr
 └───────────────┴────────────────────────────────────────────────────┘
 ```
 
-- **Demo indicator**: in the demo state, a persistent bar above the top bar reads "You're viewing a demo" with "Request access" and "Sign in". It cannot be dismissed. There is no tenant switcher and no user menu in the demo.
+- **Demo indicator**: in the demo state, a persistent bar above the top bar reads "You're viewing a demo" with "Request access" and "Sign in". It cannot be dismissed. There is no user menu in the demo, and the tenant switcher lists only demo tenants (shown only when there are several).
 - **Environment badge**: the profile name appears beside the logo in `LOCAL` and `QA`, never in `PROD`.
 - **User menu**: email, "Change password" (Cognito pools), "Sign out".
 - On every route change the document title is set to "{area} · {tenant} · OpEx" and focus moves to the page's main heading.
@@ -134,7 +139,7 @@ Each area renders its own data failures inside its panels; the shell provides th
 | Decision | Chosen | Alternatives Considered | Rationale |
 |---|---|---|---|
 | Where view state lives | Route path and query string | Global store; `sessionStorage` | Links must be shareable and reloadable; a single source avoids store/URL drift. |
-| Demo route shape | `/demo/{area}` | `/t/{demoTenantId}/{area}` | Keeps the demo state derivable from the route and keeps the configured demo tenant id out of URLs. |
+| Demo route shape | `/demo/{tenantId}/{area}` | `/t/{tenantId}/{area}` in demo mode; `/demo/{area}` with the tenant held elsewhere | A distinct prefix keeps the demo state derivable from the route; the tenant id in the path makes demo links shareable when there are several demo tenants. |
 | Area integration | Lazy descriptor list in `app/areas.ts` | Areas self-register via side-effect imports; shell imports area components directly | An explicit list is greppable and tree-shake friendly, and adding an area touches only that list and the new module. |
 | Preset links | Stay relative, with resolved dates displayed | Rewrite presets to absolute dates in the URL | A "last 30 days" bookmark is useful precisely because it moves; showing the resolved dates keeps cited numbers unambiguous. |
 | Calendar for "today" and displayed times | The browser's local time zone | UTC; a per-tenant time zone | Users read dates in their own day; the API's values stay UTC and the conversion is a presentation transform. |
@@ -144,9 +149,8 @@ Each area renders its own data failures inside its panels; the shell provides th
 
 ### Deferred
 1. The earliest date with data, and whether the API's range parameters are calendar dates or UTC instants — affects the custom range's lower bound and how a local range is sent.
-2. Tenant display names: groups carry only ids; until the API serves names, the switcher shows ids.
-3. The administrator's tenant-list endpoint.
-4. Whether the insights area shares the top bar's date range or selects a report independently — follows the insights contract.
+2. The endpoints for the administrator's tenant list and for an editor's tenant details (name, type).
+3. Whether the insights area shares the top bar's date range or selects a report independently — follows the insights contract.
 
 ## References
 

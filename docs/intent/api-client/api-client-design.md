@@ -45,6 +45,7 @@ interface SessionCredentials {
 | Request | Session mode | `Authorization` header |
 |---|---|---|
 | `POST /v1/access-requests` (public submission) | any | none |
+| `GET /v1/demo-tenants` | `none`, `demo` | none |
 | Demo read (see guard) | `demo` | none |
 | Any other permitted request | `signedIn` | `Bearer {access token}` |
 
@@ -54,12 +55,16 @@ The ID token is never requested from the port and never sent. The token value ne
 
 Guards run in a request middleware before the network call. A refused request rejects with `ApiError { kind: 'refused', reason }` and no network traffic.
 
+In every session mode, a request whose `{tenantId}` path parameter is not 24 lowercase hexadecimal characters is refused (`reason: 'tenant'`), as are demo-tenant list entries whose ids are malformed, which are dropped from the list.
+
 | Session mode | Allowed | Everything else |
 |---|---|---|
-| `none` | `POST /v1/access-requests` | refused (`reason: 'no-session'`) |
-| `demo` | `POST /v1/access-requests`; `GET` whose path is under `/v1/tenants/{demoTenantId}/` and matches an entry in `DEMO_READ_ROUTES` | refused (`reason: 'demo'`) |
+| `none` | `POST /v1/access-requests`; `GET /v1/demo-tenants` | refused (`reason: 'no-session'`) |
+| `demo` | `POST /v1/access-requests`; `GET /v1/demo-tenants`; `GET` whose path is under `/v1/tenants/{tenantId}/` for a tenant in the demo-tenant list and matches an entry in `DEMO_READ_ROUTES` | refused (`reason: 'demo'`) |
 | `signedIn`, scope `listed` | Requests whose path names no tenant, or names a tenant in the listed tenants | refused (`reason: 'tenant'`) |
 | `signedIn`, scope `all` | All requests | — |
+
+**The demo-tenant list.** The API Client owns `demoTenants()`, which fetches `GET /v1/demo-tenants` once per page load and caches it. The response is `{ items: [{ tenantId, name }] }`, sorted by name; an empty `items` means no demo is available. `invalidateDemoTenants()` clears the cache so the next call refetches. The API serves the list with `Cache-Control: public, max-age=300`, so a refetch may return the browser's cached copy for up to five minutes; a tenant that has stopped being a demo is still caught by the API's 401 on its reads. The demo guard checks a request's tenant against that cached list, loading it first if needed, so the guard depends on nothing outside `platform/api`. The App Shell uses the same `demoTenants()` for demo routing.
 
 `DEMO_READ_ROUTES` is an explicit allowlist of OAS path templates for reporting-dimension and insights reads, kept in `platform/api` beside the guard. A new dimension's demo-readable routes are added to it in the same change that adds the dimension. Path matching is done on the template the generated client was called with, not on a string search of the final URL, so encoded or crafted segments cannot widen it.
 
@@ -72,7 +77,7 @@ signedIn request ──▶ 401 ──▶ accessToken({forceRefresh:true}) ──
                           sessionRejected()                 sessionRejected()
                           reject: unauthorized              reject: unauthorized
 
-demo request ──▶ 401 ──▶ demoRejected(); reject: unauthorized
+demo request ──▶ 401 ──▶ invalidateDemoTenants(); demoRejected(); reject: unauthorized
 ```
 
 - The retry replays a clone of the original request, taken before the first send, so request bodies survive.
@@ -109,7 +114,7 @@ The API Client exports the TanStack Query defaults derived from its error classi
 |---|---|---|---|
 | OAS source in the build | Committed snapshot, types generated and git-ignored | Fetch the OAS at build time; commit generated types | A snapshot makes contract changes reviewable diffs and keeps Build free of network and cross-repo credentials; generating rather than committing types removes a second artifact that can drift. |
 | How the client learns the session | `SessionCredentials` port implemented by Auth & Session, wired by the composition root | `platform/api` importing `platform/auth` directly | Keeps the two platform modules independent and lets tests drive every session mode with a fake. |
-| Demo guard shape | Explicit allowlist of path templates plus `GET` and demo-tenant checks | Any `GET` under the demo tenant | An allowlist cannot silently admit a future sensitive read (e.g. improvement tickets) just because it is a `GET`. |
+| Demo guard shape | Explicit allowlist of path templates plus `GET` and demo-tenant-list checks | Any `GET` under a demo tenant | An allowlist cannot silently admit a future sensitive read (e.g. improvement tickets) just because it is a `GET`. |
 | Tenant containment | Local guard on the tenant path segment for `listed` scope | Rely on the API's 403 | The HLD's tenant-containment metric requires the UI never to send such a request; the API's 403 remains the real enforcement. |
 | 401 recovery | One forced refresh, one replay, shared across concurrent requests | No retry; retry per request | Covers clock skew and early revocation without a refresh storm; a second 401 means the session is genuinely gone. |
 | Timeout | 30 seconds per request | Browser default (none) | A hung request otherwise leaves a panel loading forever; 30 s comfortably exceeds normal API latency. |
@@ -119,11 +124,11 @@ The API Client exports the TanStack Query defaults derived from its error classi
 ### Deferred
 1. Where the API publishes its OAS for `api:update` (URL or artifact), to be fixed with `opex-web-api`.
 2. The API's error body shape (e.g. RFC 9457 problem details) and how field-level validation messages are expressed; the `validation` mapping follows it.
-3. Whether the API accepts a client-generated request id header for correlating UI errors with API logs.
+3. The final set of demo-readable reporting and insights routes, for `DEMO_READ_ROUTES`, from `opex-web-api`'s OAS.
+4. Whether the API accepts a client-generated request id header for correlating UI errors with API logs.
 
 ## References
 
 - `docs/high-level-design.md` — The OAS is the contract; Sessions; Key Design Decisions 7, 10
 - `docs/intent/auth-session/auth-session-design.md` — implements `SessionCredentials`
-- `docs/intent/profile-config/profile-config-design.md` — `demoTenantId`
 - `opex-web-api` — OpenAPI Specification

@@ -39,9 +39,9 @@ Each reporting dimension presents data shaped by the collector from a specific o
 | Insights | Analysts; editors and the administrator request runs | Per-section **insights** in each **report** (one per insights run over a date range), **anomaly feedback** on flagged anomalies (in progress), **insights run** requests, and the **paused** state set by the budget guard |
 | Improvement | Analysts | **DMAIC** (Define, Measure, Analyze, Improve, Control): **RCA tickets** and **action tickets** raised against a bad metric, carried through to verified improvement |
 | Access Requests | Anyone; the administrator | The public **access request** form and the administrator's list of requests |
-| Tenant Administration | Editors; the administrator | **Tenant configuration** of which GitHub repos, SonarQube projects, Jira projects, PagerDuty services, and other source items are collected |
+| Tenant Administration | Editors; the administrator | **Tenant configuration** of which GitHub repos, SonarQube projects, Jira projects, PagerDuty services, and other source items are collected; the administrator also creates **tenants**, each with a **tenant type** (`DEMO`, `CUSTOMER`, `SANDBOX`) |
 
-Use these names — dimension, metric, origin, tenant, date range, report, insights, insights run, health score, anomaly, anomaly feedback, DMAIC, RCA ticket, action ticket, tenant configuration, access request, demo tenant — consistently in code, specs, and docs (ubiquitous language). A **tenant** is one engineering team; there is no separate team concept within a tenant. Model new dimensions and areas as new bounded areas rather than special cases inside existing ones.
+Use these names — dimension, metric, origin, tenant, tenant type, date range, report, insights, insights run, health score, anomaly, anomaly feedback, DMAIC, RCA ticket, action ticket, tenant configuration, access request, demo tenant — consistently in code, specs, and docs (ubiquitous language). A **tenant** is one engineering team; there is no separate team concept within a tenant. Model new dimensions and areas as new bounded areas rather than special cases inside existing ones.
 
 ## Tech stack & hosting
 
@@ -66,14 +66,14 @@ Concrete layering, folder structure, and library choices are recorded in `docs/h
 | `QA` | AWS | Real AWS |
 | `PROD` | AWS | Real AWS |
 
-- The API base URL is the relative path `/v1` in every profile (CloudFront serves the SPA and the API on one origin; the `LOCAL` dev server proxies `/v1`). All other environment-specific values (Cognito pool and client IDs, region, demo tenant id, feature flags, etc.) come from profile configuration — never hard-coded and never branched on inline throughout the code.
+- The API base URL is the relative path `/v1` in every profile (CloudFront serves the SPA and the API on one origin; the `LOCAL` dev server proxies `/v1`). All other environment-specific values (Cognito pool and client IDs, region, feature flags, etc.) come from profile configuration — never hard-coded and never branched on inline throughout the code.
 - `LOCAL` must be runnable end-to-end without access to AWS.
 - Never commit secrets or credentials for any profile.
 
 ## API integration & auth
 
 - **The `opex-web-api` OAS is the source of truth for the API contract.** Prefer generating TypeScript types / client code from the OAS over hand-writing request/response shapes; keep any hand-written mapping in an adapter layer that translates API DTOs into domain types.
-- **Demo without signing in.** "View demo" opens the demo tenant's reporting dimensions and insights, read-only — no anomaly feedback, no insights run requests, no edits. In the demo state the UI sends only `GET` reporting and insights reads under `/v1/tenants/{demoTenantId}/…`, with no `Authorization` header; `demoTenantId` is one configuration value, never a scattered literal. A `401` in the demo state routes to sign-in.
+- **Demo without signing in.** "View demo" opens a demo tenant's reporting dimensions and insights, read-only — no anomaly feedback, no insights run requests, no edits. `opex-web-api` lists the demo tenants — tenants whose type is `DEMO` — at `GET /v1/demo-tenants`, anonymously; the UI never hard-codes or configures a demo tenant id. In the demo state the UI sends only that listing and `GET` reporting and insights reads under `/v1/tenants/{tenantId}/…` for a listed demo tenant, with no `Authorization` header. A `401` in the demo state means the tenant is no longer public: the UI refreshes the demo-tenant list and returns the visitor to the demo picker.
 - **Named users sign in with the SPA's own forms against Amazon Cognito (SRP)** — no hosted UI, no callback URLs, no self sign-up. Two pools: **main** (`opex-editor`; email + password) at `/sign-in`, and **admin** (`opex-admin`; email + password + authenticator-app MFA) at `/admin/sign-in`. In `LOCAL`, development identities minted with `dotnet user-jwts` stand in, behind the same auth port. Cognito issues and signs the JWTs; the UI never creates or verifies tokens.
 - **Send the Cognito access token** (never the ID token) as the `Bearer` token on every `/v1` call except demo reads and the public access-request submission.
 - **Roles and tenants:** a main-pool token's role is `opex-editor` when it holds that group, and its tenants are its `tenant-{tenantId}` groups; an admin-pool token is `opex-admin` for every tenant, whatever tenant groups it holds. Only the claims adapter in `platform/auth` reads Cognito claim names. The UI uses role and tenants only to show or hide things; `opex-web-api` enforces them.
@@ -106,7 +106,7 @@ Build → Test → Deploy → Smoke Test
 - **Smoke Test** — verify the deployed app in the target environment loads and can reach `opex-web-api`; a failure fails the workflow.
 - **AWS access uses GitHub OIDC.** The Deploy stage assumes the environment's IAM role through GitHub's OIDC provider. No long-lived AWS keys are stored in GitHub. The role and its trust policy are provisioned by `opex-infra-cdk`.
 - **Fork PRs** get no OIDC token, so they run Build and Test only and skip Deploy and Smoke Test.
-- Per-environment values (role ARN, region, S3 bucket, CloudFront distribution ID) are stored as GitHub Environment variables (`qa`, `prod`), set to match what `opex-infra-cdk` provisions. Never hard-code them in workflows. Smoke-test login credentials are GitHub Environment secrets, never printed in workflow logs.
+- Per-environment values (role ARN, region, S3 bucket, CloudFront distribution ID) are stored as GitHub Environment variables (`qa`, `prod`), set to match what `opex-infra-cdk` provisions. Never hard-code them in workflows. Smoke tests use the demo and need no credentials.
 
 ## Quality gates
 

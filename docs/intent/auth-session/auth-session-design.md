@@ -96,7 +96,7 @@ One claims adapter builds it. It decodes the JWT payloads without verifying them
 
 | Session from | `role` | `tenants` |
 |---|---|---|
-| Main pool | `opex-editor` if the access token's `cognito:groups` contains it; else `null` | `listed`: every `tenant-{tenantId}` group, in group order, de-duplicated |
+| Main pool | `opex-editor` if the access token's `cognito:groups` contains it; else `null` | `listed`: every `tenant-{tenantId}` group whose id is 24 lowercase hexadecimal characters, in group order, de-duplicated; other `tenant-` groups are ignored |
 | Admin pool | `opex-admin` | `all`, whatever tenant groups the token holds |
 | LOCAL identity | Same rules, applied to the development token's `cognito:groups` claim, with the pool taken from the identity's configured `pool` | Same rules |
 
@@ -116,7 +116,7 @@ can(user: UserContext | 'demo', capability: Capability, tenant: TenantId): boole
 | `viewReporting`, `viewInsights` | demo tenant only | listed tenants | any |
 | `viewImprovement` | — | listed tenants | any |
 | `editTenantConfiguration`, `requestInsightsRun`, `giveAnomalyFeedback`, `writeImprovementTickets` | — | listed tenants | any |
-| `readAccessRequests` | — | — | ✓ |
+| `readAccessRequests`, `manageTenants` (list and create tenants) | — | — | ✓ |
 | `submitAccessRequest` | ✓ | ✓ | ✓ |
 
 A `can` that returns `false` hides or disables the control; it never replaces the API's authorization.
@@ -143,7 +143,7 @@ any tab signs out ── {type:'signed-out'} ──▶ every tab clears tokens �
 ## Session Expiry and API Rejection
 
 - `sessionRejected()` (the API returned 401 after a forced refresh) and a failed refresh both end the session: tokens are cleared in this tab, and the user is sent to the sign-in route of the session's pool with "Your session has ended. Sign in again." and a return-to path.
-- `demoRejected()` sends the user to `/sign-in` with the demo route as return-to.
+- `demoRejected()` (the API answered a demo read with 401, meaning the tenant is no longer anonymously readable) clears the API Client's cached demo-tenant list and sends the visitor to `/demo` with "That demo is no longer available". The visitor stays in the demo state; `/demo` offers "Sign in" for members.
 - The return-to path is accepted only if it is a same-origin relative path beginning with `/` and not `//`; otherwise the user lands on their home.
 - Ending a session this way keeps form drafts so the user can resume after signing in again (see Forms). Signing out, in any tab, discards them along with the tokens.
 - A `403` never ends the session. The calling view shows that the action is not permitted for this account (see App Shell).

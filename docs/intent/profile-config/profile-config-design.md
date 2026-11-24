@@ -7,7 +7,7 @@ prefix: CFG
 
 ## Context and Design Philosophy
 
-The UI runs in three profiles — `LOCAL`, `QA`, and `PROD` — that differ only in configuration: which sign-in adapter is used, the Cognito region and pool identifiers, and the demo tenant's id. Profile Config is the single place those values enter the application. Every other module receives a typed, already-validated `ProfileConfig`; none reads environment variables, and none branches on the profile name.
+The UI runs in three profiles — `LOCAL`, `QA`, and `PROD` — that differ only in configuration: which sign-in adapter is used, and the Cognito region and pool identifiers. Profile Config is the single place those values enter the application. Every other module receives a typed, already-validated `ProfileConfig`; none reads environment variables, and none branches on the profile name.
 
 Three principles govern it:
 
@@ -22,7 +22,6 @@ Values arrive as Vite build-time environment variables (prefix `VITE_`). In CI t
 | Variable | Profiles | Meaning | Validation |
 |---|---|---|---|
 | `VITE_PROFILE` | all | `LOCAL`, `QA`, or `PROD` | One of the three, exactly |
-| `VITE_DEMO_TENANT_ID` | all | The demo tenant's id | Non-empty; URL path-segment safe (`[A-Za-z0-9_-]+`) |
 | `VITE_COGNITO_REGION` | QA, PROD | AWS region of both pools | AWS region format (e.g. `eu-west-1`) |
 | `VITE_MAIN_USER_POOL_ID` | QA, PROD | Main pool id | Cognito user pool id format (`{region}_{id}`), region prefix equals `VITE_COGNITO_REGION` |
 | `VITE_MAIN_USER_POOL_CLIENT_ID` | QA, PROD | Main pool app client id | Non-empty alphanumeric |
@@ -41,7 +40,6 @@ Cognito variables are rejected in a `LOCAL` build, and `VITE_LOCAL_IDENTITIES` i
 ```ts
 type ProfileConfig = {
   profile: 'LOCAL' | 'QA' | 'PROD';
-  demoTenantId: TenantId;
   auth:
     | { kind: 'local'; identities: LocalIdentity[] }
     | { kind: 'cognito'; region: string; mainPool: PoolConfig; adminPool: PoolConfig };
@@ -65,7 +63,6 @@ main.tsx ── loadProfileConfig(import.meta.env) ──▶ ProfileConfig | Con
 - `validateProfileEnv` and `loadProfileConfig` share one pure parser in `platform/config` with no dependency on Vite, React, or the browser. The parser reports **all** problems at once, naming each variable and why it is invalid, never echoing a value.
 - The build calls it from the Vite config, so the Build stage fails before bundling.
 - At startup the composition root parses `import.meta.env` once. On success it passes the frozen `ProfileConfig` to the modules that need it by constructor or provider injection. On failure it renders a static "This deployment is misconfigured" page and starts nothing else.
-- `demoTenantId` is read from `ProfileConfig` wherever the demo tenant is meant.
 
 ## Decisions & Alternatives
 
@@ -86,5 +83,4 @@ main.tsx ── loadProfileConfig(import.meta.env) ──▶ ProfileConfig | Con
 
 - `docs/high-level-design.md` — Environment profiles; Key Design Decision 11
 - `docs/intent/auth-session/auth-session-design.md` — consumes `auth`
-- `docs/intent/api-client/api-client-design.md` — consumes `demoTenantId`
 - `docs/intent/delivery-pipeline/` — sets the variables per GitHub Environment

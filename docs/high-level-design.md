@@ -12,7 +12,7 @@ The OpEx system addresses this end to end. `opex-collector-worker` collects sour
 
 `opex-web-ui` is a React + TypeScript single-page application. It is a static bundle on S3, served by the same CloudFront distribution that fronts `opex-web-api` under `/v1`, so the browser talks to one origin. Named users sign in with the SPA's own forms against Amazon Cognito. Every read and every write goes through `opex-web-api`, which persists to MongoDB Atlas.
 
-A **tenant** is one engineering team. Metrics, insights, tenant configuration, and improvement tickets all belong to a tenant; there is no team concept within a tenant.
+A **tenant** is one engineering team. Metrics, insights, tenant configuration, and improvement tickets all belong to a tenant; there is no team concept within a tenant. Each tenant has a name and a **tenant type**, recorded by `opex-web-api`: `DEMO` (its reporting data and insights are readable by anyone without signing in), `CUSTOMER`, or `SANDBOX` (which behaves exactly like `CUSTOMER`). A tenant id is the tenant record's MongoDB ObjectId: 24 lowercase hexadecimal characters.
 
 The UI has five kinds of work, each a bounded area:
 
@@ -22,7 +22,7 @@ The UI has five kinds of work, each a bounded area:
 | **Insights** | Read the per-section insights of a report generated for a date range; give feedback on flagged anomalies; request an insights run | Insights | Anomaly feedback; insights run requests | Read: demo visitors (demo tenant), signed-in roles · Feedback: `opex-editor`, `opex-admin` · Run requests: `opex-editor` for its tenants, `opex-admin` for every tenant |
 | **Improvement (DMAIC)** | Open RCA tickets and action tickets against a bad metric and carry them through Define, Measure, Analyze, Improve, and Control until the improvement is verified | Improvement tickets, metrics | Improvement tickets | `opex-editor`, `opex-admin` |
 | **Access requests** | Anyone requests editor access through a public form; the administrator reads submitted requests | Access requests | Access requests | Submit: anyone, signed in or not · Read: `opex-admin` |
-| **Tenant administration** | Choose which GitHub repos, SonarQube projects, Jira projects, PagerDuty services, and other source items the collector pulls for a tenant | Tenant configuration | Tenant configuration | `opex-editor` for its tenants; `opex-admin` for every tenant |
+| **Tenant administration** | Choose which GitHub repos, SonarQube projects, Jira projects, PagerDuty services, and other source items the collector pulls for a tenant; the administrator also lists tenants and creates them with a name and type | Tenants; tenant configuration | Tenants (create only); tenant configuration | Configuration: `opex-editor` for its tenants, `opex-admin` for every tenant · Tenants: `opex-admin` |
 
 ### Presentation, not computation
 
@@ -50,7 +50,7 @@ The `opex-web-api` OpenAPI Specification is the source of truth for every reques
 |---|---|---|
 | **Demo visitors** | No account; "View demo" opens the demo tenant's reporting dimensions and insights, read-only | To see what OpEx shows without asking anyone, and an obvious way to request access or sign in |
 | **Editors** (`opex-editor`) | Named account in the main user pool, created by the administrator after an access request, with a temporary password replaced at first sign-in; member of one or more tenant groups | Dense, interactive charts — filter, drill down, hover for exact values, compare series — and numbers they can trust and cite (a misleading chart costs them more than a missing one); configuring their tenants' collection, requesting insights runs for them, giving anomaly feedback, and working improvement tickets; and to know when insights are paused by the budget guard |
-| **The administrator** (`opex-admin`) | Private account in the admin user pool, with authenticator-app MFA | To read access requests and act on any tenant, including requesting insights runs, and to know when insights are paused by the budget guard |
+| **The administrator** (`opex-admin`) | Private account in the admin user pool, with authenticator-app MFA | To read access requests, create tenants, and act on any tenant, including requesting insights runs, and to know when insights are paused by the budget guard |
 
 ## Goals
 
@@ -78,7 +78,7 @@ The `opex-web-api` OpenAPI Specification is the source of truth for every reques
 - **Managing source-system credentials.** Tokens and keys the collector uses to reach source systems live in the host's secret store; tenant administration configures *what* is collected, not *how* the collector authenticates.
 - **Managing users.** The UI does not create, disable, or delete users, assign groups, approve access requests, or provide self sign-up. The administrator does that in Cognito.
 - **A shared or published account.** Demo visitors use the demo without signing in; every Cognito user is a named person.
-- **Tenant provisioning.** Creating tenants and their tenant groups is the administrator's manual step in Cognito and the API.
+- **Provisioning beyond the tenant record.** The administrator creates a tenant's record (name and type) in the UI. Creating its `tenant-{tenantId}` group in Cognito and adding users to it are manual steps in Cognito, and a tenant's type is changed only by hand in MongoDB Atlas, because switching a tenant to `DEMO` publishes its data.
 - **Provisioning infrastructure.** S3, CloudFront, Cognito, SNS, and related AWS resources are owned by `opex-infra-cdk`.
 - **Server-side rendering or a backend-for-frontend.** The UI is a static bundle.
 - **Mobile-first layouts.** The UI targets desktop browsers; it must remain usable but not optimized for phones.
@@ -180,12 +180,13 @@ Every tab is in exactly one of three states:
 | State | Entered by | API calls | What is shown |
 |---|---|---|---|
 | **None** | Opening the app | Only the access-request submission | Landing page: "View demo", "Sign in", "Request access" |
-| **Demo** | "View demo" | `GET` reporting and insights reads under `/v1/tenants/{demoTenantId}/…`, with no `Authorization` header | The demo tenant's reporting dimensions and insights, read-only, with a persistent "Demo" indicator offering "Request access" and "Sign in" |
+| **Demo** | "View demo" | `GET /v1/demo-tenants`, and `GET` reporting and insights reads under `/v1/tenants/{tenantId}/…` for a listed demo tenant, with no `Authorization` header | A demo tenant's reporting dimensions and insights, read-only, with a persistent "Demo" indicator offering "Request access" and "Sign in" |
 | **Signed in** | Completing sign-in on the main or admin pool | All permitted calls, with the Cognito **access** token as `Bearer` | Areas and actions the user's role permits, for the active tenant |
 
-- The demo tenant's id is one profile configuration value, `demoTenantId`, read wherever the demo tenant is meant; it is never written as a literal elsewhere.
-- In the demo state the API client refuses any request other than a `GET` under the demo tenant's reporting and insights routes, and the UI renders no edit controls, tenant administration, anomaly feedback, insights run requests, improvement tickets, or administrator screens.
-- A `401` received in the demo state takes the user to sign-in rather than to an error page.
+- A demo tenant is a tenant whose type is `DEMO`. `opex-web-api` is the only place that knows which tenants are demo tenants; it lists them anonymously at `GET /v1/demo-tenants`, sorted by name. With one demo tenant, "View demo" opens it directly; with several, the visitor picks one. The UI never hard-codes or configures a demo tenant id.
+- In the demo state the API client refuses any request other than the demo-tenant listing and a `GET` under a listed demo tenant's reporting and insights routes, and the UI renders no edit controls, tenant administration, anomaly feedback, insights run requests, improvement tickets, or administrator screens.
+- A `401` received in the demo state means the tenant is no longer anonymously readable (the API may keep serving a tenant for up to five minutes after it stops being `DEMO`). The UI refreshes the demo-tenant list and returns the visitor to the demo picker with "That demo is no longer available", rather than to an error page.
+- Signed-in users get no demo bypass: they read a demo tenant only as members of its tenant group, or as the administrator. Members of a demo tenant keep their normal powers, and whatever they write that appears in reporting or insights — anomaly feedback included — is visible to anonymous visitors, so the UI marks a demo tenant as public wherever its members work in it.
 - The demo state needs no storage beyond the current route; signing in replaces it, and signing out returns to the none state.
 
 ### Sign-in
@@ -251,10 +252,11 @@ One adapter in `platform/auth` maps a token to the user context; nothing else re
 | View insights | demo tenant | own tenants | every tenant |
 | View improvement tickets | | own tenants | every tenant |
 | Edit tenant configuration; request insights runs; give anomaly feedback; create and advance improvement tickets | | own tenants | every tenant |
-| Read access requests | | | ✓ |
+| Read access requests; list and create tenants | | | ✓ |
 | Submit an access request | ✓ | ✓ | ✓ |
 
 - A main-pool user without the `opex-editor` group, or with no tenant groups, is signed in but has no access; the UI says so and links to the access-request form.
+- Tenant ids are checked as 24 lowercase hexadecimal characters wherever they enter the UI — routes, tenant groups, API responses. A malformed id is treated as not found and never sent to the API.
 
 - The **active tenant** is chosen in the app shell from the user's tenants and appears in the UI route, so links are shareable. A route naming a tenant outside the user's tenants shows a not-permitted state rather than calling the API. A user with one tenant never sees a switcher.
 
@@ -277,7 +279,7 @@ sequenceDiagram
     R->>UI: First sign-in → set new password
 ```
 
-- The form collects email, name, company, role at the company, and the reason for the request; the API's access-request design fixes the final field set.
+- The form collects email, name, company, role at the company, the team they want access to (optional, free text), and the reason for the request; the API's access-request design fixes the final field set.
 - It is reachable from every state. It includes a hidden honeypot field and shows the same confirmation whenever the API accepts the request, so it reveals nothing about existing requests or accounts. Throttling and validation are the API's.
 
 ### Insights runs and the paused state
@@ -335,7 +337,7 @@ Limits that `opex-web-api` enforces and the UI also enforces, so a user learns o
 | `PROD` | S3 + CloudFront (PROD) | PROD `opex-web-api` behind the same CloudFront | PROD main and admin pools |
 
 - The API base URL is the relative path `/v1` in every profile; there is no per-profile API URL and no CORS.
-- Per-profile configuration, fixed at build time: the sign-in adapter; for Cognito profiles, the region and each pool's user pool ID and app client ID; and `demoTenantId`. None of it is secret — an SPA bundle is public.
+- Per-profile configuration, fixed at build time: the sign-in adapter; for Cognito profiles, the region and each pool's user pool ID and app client ID. None of it is secret — an SPA bundle is public.
 - QA and PROD share one AWS account and are separated by resource naming in `opex-infra-cdk`; the UI sees only its profile's values.
 
 ### Delivery pipeline
@@ -356,7 +358,7 @@ Workflows run on GitHub Actions.
 
 - **AWS access through GitHub OIDC.** The Deploy stage assumes the target environment's IAM role through GitHub's OIDC provider and receives short-lived credentials for that run only. No long-lived AWS keys exist in GitHub.
 - **Fork pull requests** receive no OIDC token, so they run Build and Test only.
-- **Per-environment values** are GitHub Environment variables on `qa` and `prod`, set to the values `opex-infra-cdk` outputs: the deploy role ARN, region, S3 bucket, CloudFront distribution ID, and the main and admin pools' user pool IDs and app client IDs. The Build stage passes the Cognito values to the bundle as build-time environment variables.
+- **Per-environment values** are GitHub Environment variables on `qa` and `prod`, set to the values `opex-infra-cdk` outputs: the deploy role ARN, region, S3 bucket, CloudFront distribution ID, the deployed app's URL for the smoke test, and the main and admin pools' user pool IDs and app client IDs. The Build stage passes the Cognito values to the bundle as build-time environment variables.
 - **Smoke tests use the demo.** They open the deployed app, enter the demo, and load dashboards through `/v1` without signing in, so they need no credentials and cannot change data or notify the administrator.
 
 ### Components and design docs
@@ -368,7 +370,7 @@ Each component below is a leaf LLD under `docs/intent/`, owning the EARS prefix 
 | App Shell | `app-shell/` | `SHELL` | Routing, layout, navigation, landing page, demo indicator, tenant switcher, date range selection (presets and custom start/end), role-gated areas, global error handling |
 | Auth & Session | `auth-session/` | `AUTH` | `AuthGateway` port; main-pool, admin-pool, and LOCAL adapters; sign-in challenges; password change and reset; demo/none/signed-in states; token storage, refresh, and tab handoff; sign-out; claims → user context; 401/403 handling |
 | API Client | `api-client/` | `API` | Client generation from OAS, `/v1` transport, Bearer vs. demo (no header) requests, demo request guard, error mapping |
-| Profile Config | `profile-config/` | `CFG` | LOCAL/QA/PROD configuration, `demoTenantId`, and validation |
+| Profile Config | `profile-config/` | `CFG` | LOCAL/QA/PROD configuration and validation |
 | Charting | `charting/` | `CHART` | Plotly wrappers, chart conventions, empty/partial/stale data presentation |
 | Forms | `forms/` | `FORM` | Form state, validation display, confirmed-save flow, conflict and failure presentation, unsaved-changes guard |
 | Code Quality | `code-quality/` | `CQ` | Bugs / Code Smells / Vulnerabilities, Duplication Density, Code Coverage |
@@ -379,7 +381,7 @@ Each component below is a leaf LLD under `docs/intent/`, owning the EARS prefix 
 | Insights | `insights/` | `INS` | Per-section executive summary, health score, anomalies, RCA assistance, recommended actions; anomaly feedback; insights run requests; paused state |
 | Improvement | `improvement/` | `DMAIC` | RCA tickets and action tickets, DMAIC phase progression, Control-phase verification view |
 | Access Requests | `access-requests/` | `ACCESS` | Public access-request form; administrator's request list |
-| Tenant Administration | `administration/` | `ADMIN` | Viewing and editing tenant configuration per source system |
+| Tenant Administration | `administration/` | `ADMIN` | Viewing and editing tenant configuration per source system; the administrator's tenant list and tenant creation |
 | Delivery Pipeline | `delivery-pipeline/` | `PIPE` | GitHub Actions workflows, quality gates, deploy, smoke tests |
 
 ## Key Design Decisions
@@ -394,10 +396,12 @@ Each reporting dimension, and each of insights, improvement, access requests, an
 
 ### 2. Demo without signing in
 
-Visitors read the demo tenant's reporting data and insights with no token; `opex-web-api` permits unauthenticated `GET`s of those for that tenant only.
+Visitors read demo tenants' reporting data and insights with no token; `opex-web-api` lists the demo tenants and permits unauthenticated `GET`s of those reads for demo tenants only.
 
 - *Alternative — a shared demo account with published credentials:* one sign-in path for everyone, but any visitor holding its token could change its password, email, or MFA through Cognito's self-service calls, locking out or taking over the account for everyone.
-- *Why this one:* nothing to lock down, no credentials to publish, and the demo opens in one click. The UI mirrors the API's rule with a demo request guard so a bug cannot send writes or non-demo reads without a token.
+- *Alternative — the demo tenant's id as a build-time setting in the UI:* no API change, but limits the system to one demo tenant and requires the UI's and the API's configuration to be kept in sync by hand.
+- *Alternative — demo-specific API routes without a tenant id:* the UI never sees a demo tenant id, but every reporting and insights route needs a demo twin, and there can still be only one demo.
+- *Why this one:* nothing to lock down, no credentials to publish, and the demo opens in one click. The API alone decides which tenants are demos, so adding or changing a demo needs no UI build. The UI mirrors the API's rule with a demo request guard so a bug cannot send writes or non-demo reads without a token.
 
 ### 3. Two Cognito user pools, chosen by route
 
@@ -493,7 +497,7 @@ Pull requests share one QA environment. A newer QA workflow run cancels any in-p
 - **Contract fidelity:** a change to the OAS that breaks a consumer fails type-check. *Broken if* an API contract change reaches QA without a compile error in the affected adapter.
 - **Accuracy:** no rendered metric value differs from the API's value for the same query. *Broken if* a user finds a chart showing interpolated, filled, or recomputed values without a visible label.
 - **Write fidelity:** every record shown as saved exists in the API with the values shown. *Broken if* a user sees a record as saved that the API did not persist, or loses input after a failed save.
-- **Demo containment:** in the demo state the UI sends only `GET` reporting and insights reads for the demo tenant, never with an `Authorization` header. *Broken if* any other request leaves the UI while in the demo state.
+- **Demo containment:** in the demo state the UI sends only the demo-tenant listing and `GET` reporting and insights reads for listed demo tenants, never with an `Authorization` header. *Broken if* any other request leaves the UI while in the demo state.
 - **Tenant containment:** a signed-in non-administrator's UI never requests a tenant outside their tenant groups. *Broken if* any API call from the UI names a tenant the user does not belong to.
 - **Isolation:** removing any one area module leaves the remaining app compiling and its tests passing. *Broken if* areas accumulate cross-imports.
 - **Delivery:** every `main` commit is deployed to PROD and passes its smoke test without manual steps. *Broken if* PROD deploys require manual intervention or smoke-test failures go unnoticed.
@@ -502,7 +506,7 @@ Pull requests share one QA environment. A newer QA workflow run cancels any in-p
 
 - **Local API port:** the `LOCAL` profile's `opex-web-api` port is not yet fixed.
 - **Token lifetimes:** access-token and refresh-token validity for each pool's app client.
-- **Tenant list for the administrator:** the API endpoint that lists every tenant, for the administrator's tenant switcher.
+- **Tenant endpoints:** the paths of the administrator's tenant list (id, name, type) and tenant creation, and an endpoint through which members read their own tenants' names and types — tenant groups carry only ids.
 - **Date range model:** the earliest date the API holds data for, which bucket granularities (day, week, sprint, month) the API supports for a given date range, and whether range parameters are calendar dates or UTC instants (which fixes how a range chosen in the user's time zone is sent).
 - **Tenant configuration concurrency:** whether the API detects conflicting edits (e.g. a version or ETag) so that two editors cannot silently overwrite each other, and when a saved change takes effect in collection.
 - **Insights contract:** the run-request endpoint, how a tenant's reports are listed and one is chosen for reading (e.g. by date range), whether the date range selected for reporting dimensions also selects the report, the report document's status values, and the shape in which the API reports the paused state and its resume date — defined by `opex-web-api`'s `insights` design.
@@ -510,8 +514,8 @@ Pull requests share one QA environment. A newer QA workflow run cancels any in-p
 - **DMAIC model:** ticket fields, allowed phase transitions, how RCA tickets and action tickets relate, what makes an improvement verified in Control, and whether tickets link to Jira.
 - **Access-request lifecycle:** whether requests carry statuses the administrator can set in the UI, or remain a read-only log.
 - **Sign-in smoke check:** whether deployed environments also need an automated sign-in check, which would require a dedicated named test user.
-- **Obligations on `opex-web-api`:** anonymous `GET`s of reporting data and insights for the demo tenant only; the administrator's tenant list; insights run requests by editors for their tenants and by the administrator for any tenant, and the paused state; anomaly feedback and improvement tickets with their owned collections, recording the author on each record; and `LOCAL` development identities usable by the UI.
-- **Obligations on `opex-infra-cdk`:** the outputs the UI build needs (region, both pools' user pool IDs and app client IDs, bucket, distribution, deploy role); a Content Security Policy whose `connect-src` allows the region's Cognito endpoint; and SPA fallback routing that leaves `/v1/*` to the API.
+- **Obligations on `opex-web-api`:** an anonymous listing of demo tenants, and anonymous `GET`s of reporting data and insights for demo tenants only; the administrator's tenant list (id, name, type) and tenant creation returning the new tenant's id; each tenant's name and type, readable by its members; checking that each tenant-configuration item exists in its source system before storing it; insights run requests by editors for their tenants and by the administrator for any tenant, and the paused state; anomaly feedback and improvement tickets with their owned collections, recording the author on each record; and `LOCAL` development identities usable by the UI.
+- **Obligations on `opex-infra-cdk`:** the outputs the UI build needs (region, both pools' user pool IDs and app client IDs, bucket, distribution, deploy role, app URL); a deploy role allowed to list, write, and delete objects in the bucket, so each deploy can keep the previous release's assets and prune older ones; a Content Security Policy whose `connect-src` allows the region's Cognito endpoint; and SPA fallback routing that leaves `/v1/*` to the API.
 
 ## References
 
